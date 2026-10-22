@@ -1,0 +1,57 @@
+// Trace-context identifier and header helpers.
+import { createHash } from 'node:crypto';
+import { SessionContext } from './types';
+
+// Three distinct identifiers, one per level of the hierarchy. Getting the
+// levels right is the whole point:
+//
+//   thread  — the chat. Codex's own session_id, sent as the
+//             X-Reva-Thread-Id header on every RTG call. Constant from the
+//             first prompt of a conversation to the last; changes only when
+//             a new chat is started.
+//   trace   — one user turn. Derived from Codex's required `turn_id`
+//             (sha256(turn_id).slice(0,32)), so every hook in that turn
+//             agrees without shared state. The next turn gets a new one.
+//   span    — one operation inside the turn. Derived, not random, so the
+//             PreToolUse and PostToolUse halves of the SAME tool call land
+//             on the same span: both hooks see identical tool_name and
+//             tool_input, so both compute the same value with no shared
+//             state. See deriveSpanId's own note on the collision this
+//             accepts.
+//
+// Before this, traceId was a hash of session_id (constant for the entire
+// session) and spanId was a hash of turn_id — the levels were each one step
+// too high, and there was no thread header at all.
+//
+// Codex's turn_id is REQUIRED on every turn-scoped hook, so the trace id is
+// deterministic from the host rather than minted and pinned in a turn cache.
+
+// 32 hex chars, W3C traceparent trace-id. Deterministic per Codex turn_id
+// so every hook in that turn agrees without any shared state.
+export function buildTraceId(turnId: string): string {
+  return createHash('sha256').update(turnId).digest('hex').slice(0, 32);
+}
+
+// 16 hex chars, W3C traceparent parent-id (span). Derived from the trace plus
+// a caller-supplied key describing the operation.
+//
+// The key for a tool call is tool_name + tool_input, which PreToolUse and
+// PostToolUse both have and which are identical between them — that is what
+// makes the pair share a span without any state passing between the two
+// processes.
+//
+// Accepted consequence: two genuinely separate calls with identical input in
+// one turn (the same bash command run twice) collapse onto one span. They
+// stay under the correct trace, so the turn is still whole; they just are not
+// distinguishable from each other within it.
+export function deriveSpanId(traceId: string, key: string): string {
+  return createHash('sha256').update(`${traceId}:${key}`).digest('hex').slice(0, 16);
+}
+
+export function buildSessionContext(sessionId: string, spanId: string, traceId: string, id?: string): SessionContext {
+  return { id: id || sessionId, traceId, spanId };
+}
+
+export function traceparentHeader(traceId: string, spanId: string): string {
+  return `00-${traceId}-${spanId}-01`;
+}

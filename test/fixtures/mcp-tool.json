@@ -1,0 +1,12 @@
+{
+  "session_id": "sess-abc123",
+  "turn_id": "turn-1",
+  "cwd": ".",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-5.6-terra",
+  "permission_mode": "default",
+  "tool_name": "mcp__github__search_repositories",
+  "tool_input": { "query": "openai", "sort": "stars" },
+  "tool_use_id": "call-4",
+  "transcript_path": null
+}

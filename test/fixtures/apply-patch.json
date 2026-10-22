@@ -1,0 +1,12 @@
+{
+  "session_id": "sess-abc123",
+  "turn_id": "turn-1",
+  "cwd": ".",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-5.6-terra",
+  "permission_mode": "default",
+  "tool_name": "apply_patch",
+  "tool_input": { "command": "*** Begin Patch\n*** Add File: src/newFile.ts\n+export const x = 1;\n*** Update File: src/config.ts\n@@\n+// changed\n*** End Patch" },
+  "tool_use_id": "call-3",
+  "transcript_path": null
+}

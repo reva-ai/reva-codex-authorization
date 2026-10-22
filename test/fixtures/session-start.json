@@ -1,0 +1,9 @@
+{
+  "session_id": "sess-abc123",
+  "cwd": ".",
+  "hook_event_name": "SessionStart",
+  "model": "gpt-5.6-terra",
+  "permission_mode": "default",
+  "source": "startup",
+  "transcript_path": null
+}

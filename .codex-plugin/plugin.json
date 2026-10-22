@@ -1,0 +1,12 @@
+{
+  "name": "reva-security",
+  "version": "1.2.0",
+  "description": "Reva Security is an enterprise governance plugin that monitors every action taken by AI coding agents. Evaluates each file edit, shell command, MCP tool call, and subagent invocation before execution. Sensitive operations are routed for human approval, and every decision is recorded in a complete audit trail, giving security and engineering leaders full visibility and control.",
+  "keywords": ["reva", "security", "authorization", "cedar", "policy"],
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "Reva Security",
+    "developerName": "Reva AI",
+    "shortDescription": "Policy enforcement point for Codex CLI tool calls and prompts"
+  }
+}

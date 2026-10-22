@@ -1,0 +1,12 @@
+{
+  "session_id": "sess-abc123",
+  "turn_id": "turn-1",
+  "cwd": ".",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-5.6-terra",
+  "permission_mode": "default",
+  "tool_name": "Bash",
+  "tool_input": { "command": "Get-ChildItem src,test | Select-Object FullName; Get-Content package.json" },
+  "tool_use_id": "call-2",
+  "transcript_path": null
+}

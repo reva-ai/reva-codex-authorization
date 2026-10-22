@@ -1,0 +1,12 @@
+{
+  "session_id": "sess-abc123",
+  "turn_id": "turn-1",
+  "cwd": ".",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-5.6-terra",
+  "permission_mode": "default",
+  "tool_name": "spawn_agent",
+  "tool_input": { "agent_type": "explorer", "task_name": "find auth code" },
+  "tool_use_id": "call-5",
+  "transcript_path": null
+}

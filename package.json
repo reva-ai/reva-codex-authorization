@@ -1,0 +1,21 @@
+{
+  "name": "reva-security",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Reva Security — enterprise governance for every OpenAI Codex CLI tool call and prompt",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "postbuild": "codex plugin marketplace add . && codex plugin add reva-security@reva-plugins || echo \"reva: Codex plugin not installed - see README Installing\"",
+    "postinstall": "npm run build",
+    "test": "tsc -p tsconfig.json && node --test dist/test/*.test.js",
+    "mock-rtg": "node scripts/mock-rtg-server.mjs",
+    "uninstall-plugin": "codex plugin remove reva-security@reva-plugins && codex plugin marketplace remove reva-plugins"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.4"
+  }
+}
