@@ -1,6 +1,6 @@
 {
   "name": "reva-security",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Reva Security — enterprise governance for every OpenAI Codex CLI tool call and prompt",
   "engines": {

@@ -9,8 +9,8 @@ import { resolveDataDir } from './pluginPaths';
 // This resolver answers "which physical machine is this", and its only
 // consumer is the `User.registeredMachineIds` Set. The Cedar `Agent` is
 // ACCOUNT-scoped and comes from identity.ts's readCodexAccountId(): a
-// hardware-rooted Agent would fragment one human into a separate Agent
-// entity per machine they log in from, which is the opposite of what an
+// hardware-rooted Agent would fragment one account into a separate Agent
+// entity per machine it logs in from, which is the opposite of what an
 // Agent identity should mean.
 //
 // Keeping the two as two separate functions is the point. Conflating them

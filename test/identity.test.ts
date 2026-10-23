@@ -166,42 +166,61 @@ test('a detected surface always beats the declared fallback', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Account id — the Cedar Agent's identity. Person-scoped, stable across
-// machines, and NOT the workspace id sitting next to it.
+// Account id — the Cedar Agent's identity: the ChatGPT account
+// (`chatgpt_account_id`), stable across machines, and NOT the per-person
+// user id sitting next to it.
 // ---------------------------------------------------------------------------
 
-test('the account id is the person-scoped chatgpt_user_id', () => {
+test('the account id is chatgpt_account_id, not the per-person user id', () => {
   const file = writeAuthJsonAt({
     tokens: {
       id_token: jwt({
-        'https://api.openai.com/auth': { chatgpt_user_id: 'user-abc', chatgpt_account_id: 'org-xyz' },
+        'https://api.openai.com/auth': {
+          chatgpt_account_id: 'acct-123',
+          chatgpt_user_id: 'user-abc',
+          user_id: 'user-abc',
+        },
       }),
     },
   });
-  assert.equal(readCodexAccountId(file), 'user-abc');
+  assert.equal(readCodexAccountId(file), 'acct-123');
 });
 
-test('chatgpt_account_id is the ORG and must never be used as the account id', () => {
-  // Codex's own doc comment calls it the "Organization/workspace identifier".
-  // Using it would collapse every colleague in a workspace into one Cedar
-  // identity — blueprint pitfall #6, in this host's concrete form.
-  const file = writeAuthJsonAt({
-    tokens: { id_token: jwt({ 'https://api.openai.com/auth': { chatgpt_account_id: 'org-xyz' } }) },
+test('tokens.account_id is used when the id_token carries no chatgpt_account_id', () => {
+  const noClaim = writeAuthJsonAt({
+    tokens: { id_token: jwt({ 'https://api.openai.com/auth': { chatgpt_user_id: 'user-abc' } }), account_id: 'acct-123' },
   });
-  assert.equal(readCodexAccountId(file), undefined, 'the org id must not stand in for the person');
+  assert.equal(readCodexAccountId(noClaim), 'acct-123');
+  // And with no readable id_token at all.
+  const noToken = writeAuthJsonAt({ tokens: { account_id: 'acct-123' } });
+  assert.equal(readCodexAccountId(noToken), 'acct-123');
 });
 
-test('user_id is the documented fallback, matching Codex resolution order', () => {
+test('the claim wins over tokens.account_id when both are present', () => {
   const file = writeAuthJsonAt({
-    tokens: { id_token: jwt({ 'https://api.openai.com/auth': { user_id: 'user-fallback' } }) },
+    tokens: {
+      id_token: jwt({ 'https://api.openai.com/auth': { chatgpt_account_id: 'acct-claim' } }),
+      account_id: 'acct-field',
+    },
   });
-  assert.equal(readCodexAccountId(file), 'user-fallback');
+  assert.equal(readCodexAccountId(file), 'acct-claim');
+});
+
+test('the user id is never substituted — an install must not resolve to two kinds of id', () => {
+  // With only per-person ids present there is no account id. Falling back to
+  // them would split one Agent in two across runs.
+  const file = writeAuthJsonAt({
+    tokens: {
+      id_token: jwt({ 'https://api.openai.com/auth': { chatgpt_user_id: 'user-abc', user_id: 'user-abc' } }),
+    },
+  });
+  assert.equal(readCodexAccountId(file), undefined);
 });
 
 test('the same login on two machines yields the SAME account id', () => {
   // This is the whole point of account-scoping over hardware-scoping: a
-  // hardware id would produce two unrelated Agent entities for one human.
-  const token = jwt({ 'https://api.openai.com/auth': { chatgpt_user_id: 'user-abc' } });
+  // hardware id would produce two unrelated Agent entities for one account.
+  const token = jwt({ 'https://api.openai.com/auth': { chatgpt_account_id: 'acct-123' } });
   const machineA = writeAuthJsonAt({ tokens: { id_token: token } });
   const machineB = writeAuthJsonAt({ tokens: { id_token: token } });
   assert.equal(readCodexAccountId(machineA), readCodexAccountId(machineB));

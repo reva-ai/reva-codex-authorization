@@ -81,40 +81,53 @@ function readAuthClaims(authPath?: string, env: NodeJS.ProcessEnv = process.env)
   }
 }
 
-// The ACCOUNT id backing the Cedar `Agent` entity — person-scoped and stable
-// across every machine that account logs in from.
+// auth.json's own `tokens.account_id` — the same identifier as the id_token's
+// `chatgpt_account_id` claim, stored as a plain field (no JWT decoding needed).
+function readTokensAccountId(authPath?: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
+  try {
+    const raw = fs.readFileSync(codexAuthPath(authPath, env), 'utf8');
+    const value = JSON.parse(raw)?.tokens?.account_id;
+    return typeof value === 'string' && value.length > 0 ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// The ChatGPT ACCOUNT id backing the Cedar `Agent` entity — stable across
+// every machine that account logs in from.
 //
-// Sourced from the `https://api.openai.com/auth` claim of auth.json's
-// id_token, preferring `chatgpt_user_id` and falling back to `user_id` — the
-// same order Codex itself uses (codex-rs/login/src/token_data.rs
-// parse_chatgpt_jwt_claims: `auth.chatgpt_user_id.or(auth.user_id)`).
+// Sourced from the `chatgpt_account_id` claim (under
+// `https://api.openai.com/auth`) of auth.json's id_token, falling back to
+// auth.json's own `tokens.account_id`, which holds the same value.
 //
-// CRITICALLY, NOT `chatgpt_account_id`. That claim sits right beside these
-// two and looks equally plausible, but Codex's own doc comment calls it the
-// "Organization/workspace identifier" — it is the ORG, not the person. Using
-// it would scope every Agent to a workspace and collapse every colleague in
-// that workspace into one Cedar identity. This is the trap the blueprint's
-// pitfall #6 describes, in this host's concrete form.
+// What this id is: Codex describes it as the "Organization/workspace
+// identifier" the token was issued for (codex-rs/login/src/token_data.rs). On
+// a personal plan it maps one-to-one to a person; on a Team / Business /
+// Enterprise workspace every member of that workspace shares it, and one person
+// in several workspaces has a different id in each. That is the intended scope
+// of the Agent: it is the ChatGPT account, not the individual. Who is acting is
+// carried by the User entity (email) and the Agent's `user` attribute, which is
+// written once at creation and so names the first member to appear.
 //
 // Deliberately NOT the machine id: a hardware-rooted Agent fragments one
-// human into a separate Agent entity per machine they log in from. Machine
+// account into a separate Agent entity per machine it logs in from. Machine
 // identity is a genuinely different concept with its own resolver and its own
-// legitimate fallback chain — see resolveMachineId() in deviceId.ts.
+// legitimate fallback chain — see resolveMachineId() in deviceId.ts. Nor does
+// this fall back to the per-person `chatgpt_user_id`: an install that resolved
+// to one kind of id on some runs and another on others would split one Agent in
+// two.
 export function readCodexAccountId(authPath?: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
   const claims = readAuthClaims(authPath, env);
   const auth = claims != null && typeof claims === 'object' ? claims['https://api.openai.com/auth'] : undefined;
-  if (auth == null || typeof auth !== 'object') return undefined;
-  for (const key of ['chatgpt_user_id', 'user_id']) {
-    const value = auth[key];
-    if (typeof value === 'string' && value.length > 0) return value;
-  }
-  return undefined;
+  const fromClaim = auth != null && typeof auth === 'object' ? auth.chatgpt_account_id : undefined;
+  if (typeof fromClaim === 'string' && fromClaim.length > 0) return fromClaim;
+  return readTokensAccountId(authPath, env);
 }
 
 export const MISSING_ACCOUNT_ID_MESSAGE =
-  'Reva governance cannot resolve a stable account id for this Codex install. The Agent entity must be ' +
-  'account-scoped so one human is one Agent across every machine they use — a machine or random id would ' +
-  'silently fragment that. This normally means Codex is signed in with an API key rather than a ChatGPT ' +
+  'Reva governance cannot resolve a stable account id for this Codex install. The Agent entity is keyed by ' +
+  'the ChatGPT account id so it stays the same across every machine that account uses — a machine or random ' +
+  'id would silently fragment that. This normally means Codex is signed in with an API key rather than a ChatGPT ' +
   'account, or its auth material lives in an OS keyring rather than $CODEX_HOME/auth.json. Sign in with a ' +
   'ChatGPT account, or set REVA_AGENT_ID explicitly to the account id this install should report.';
 

@@ -112,8 +112,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, configPath?: st
   return {
     rtgUrl,
     authorization,
-    // ACCOUNT-scoped, not machine-scoped: one human is one Agent across
-    // every machine they sign in from. NO FALLBACK — if no account id can be
+    // ACCOUNT-scoped, not machine-scoped: one ChatGPT account is one Agent
+    // across every machine it signs in from. NO FALLBACK — if no account id can be
     // resolved, this throws rather than substituting a machine or random id.
     agentId: fromFile.agentId || env.REVA_AGENT_ID?.trim() || resolveAccountAgentId(env),
     // REVA_PDP_TIMEOUT_MS is a public, documented config variable — its

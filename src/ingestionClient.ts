@@ -354,7 +354,8 @@ export async function upsertUser(
 
 // GET-then-branch upsert for the Agent — the ACCOUNT, not the machine.
 //
-// `user` is create-only (the human this account belongs to does not change).
+// `user` is create-only: it records whoever first appears on this account (on a
+// shared workspace account, the first member to start a session).
 // `agentType` is scalar, per the platform's own Agent schema. Agent id is
 // the account id, and from this plugin's perspective that account always
 // talks to Reva through exactly one tool (this one), so there is nothing to

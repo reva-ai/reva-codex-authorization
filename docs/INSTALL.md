@@ -19,7 +19,6 @@ codex plugin marketplace add https://github.com/reva-ai/reva-codex-authorization
 codex plugin add reva-security@reva-plugins
 ```
 
-//Check remove if --config works
 **2. Add your token** to `~/.codex/config.toml`:
 
 ```toml
@@ -28,18 +27,14 @@ auth_token = "<your token>"
 ```
 Start a new `codex` session afterwards — configuration is read at session start, not live.
 
-//Check 
+If your tenant is not on `api.reva.ai`, set your host in the same block:
 
-If your tenant is not on `api.reva.ai`, pass it at install time too:
-
-//check
-```bash
-codex plugin install reva-security@reva-plugins \
-  --config auth_token=<your token> \
-  --config host=api.example.reva.ai
+```toml
+[reva]
+host = "api.example.reva.ai"
 ```
 
-`REVA_HOST` in the environment overrides the dialog value — see
+`REVA_HOST` in the environment overrides `host` — see
 [CONFIGURATION.md](CONFIGURATION.md).
 
 ## Team rollout
@@ -61,7 +56,7 @@ In the ChatGPT **Admin Console → Agent Security → configuration defaults**, 
 ```toml
 [marketplaces.reva-plugins]
 source_type = "git"
-source = "https://github.com/reva-ai/<repo>.git"  --update
+source = "https://github.com/reva-ai/reva-codex-authorization.git"
 ref = "<release tag>"
 
 [plugins."reva-security@reva-plugins"]
@@ -78,7 +73,6 @@ change `ref`.
    **Trust all and continue**.
 3. If you skipped that prompt, run `/hooks` and trust the five Reva Security hooks.
 
-//check
 ## Updating
 
 **Your token.**

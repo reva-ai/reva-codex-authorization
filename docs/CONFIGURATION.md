@@ -68,13 +68,15 @@ sees it.
 
 Read this section if you do **not** sign in to Codex with a ChatGPT account.
 
-The plugin derives the agent's identity from the ChatGPT account id
-(`chatgpt_user_id`, falling back to `user_id`) inside the `id_token` in
-`$CODEX_HOME/auth.json`. 
+The plugin derives the agent's identity from the ChatGPT account id: the
+`chatgpt_account_id` claim of the `id_token` in `$CODEX_HOME/auth.json`, or the
+file's `tokens.account_id`, which holds the same value. That id belongs to the ChatGPT
+account or workspace, so on a Team, Business or Enterprise workspace everyone in it shares
+one `Agent`, and the developer is told apart by the `User` entity (email).
 An API-key sign-in has no such account, and the same is true when
 Codex keeps its credentials in the OS keyring instead of `auth.json`. The plugin
 deliberately does **not** substitute a machine id or a random value: an invented identity
-would be meaningless to a policy, and would split one person into one `Agent` per machine.
+would be meaningless to a policy, and would split one account into one `Agent` per machine.
 
 The result is that the plugin **fails closed and blocks every action** with:
 

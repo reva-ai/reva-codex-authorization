@@ -1,4 +1,6 @@
 node_modules/
-dist/
+# dist/src is committed: Codex runs the hooks straight from the installed copy
+# of this repository, with no build step. dist/test is only test output.
+dist/test/
 *.tsbuildinfo
 mock.log

@@ -48,7 +48,7 @@ Alongside the content, each request carries identity and resource metadata:
 | Field | Value | Source |
 |---|---|---|
 | principal | The developer's **email address** | the `email` claim of the `id_token` in `$CODEX_HOME/auth.json`; falls back to the **OS username** if absent, e.g. with API-key sign-in |
-| subject / agent id | The ChatGPT **account id** | `chatgpt_user_id` (or `user_id`) from the same `id_token`, or `agent_id` / `REVA_AGENT_ID` when set |
+| subject / agent id | The ChatGPT **account id** | `chatgpt_account_id` from the same `id_token` (or `tokens.account_id` in `auth.json`), or `agent_id` / `REVA_AGENT_ID` when set |
 | resource id | The file, directory, repository, tool or sub-agent acted on | See "Paths" below |
 | context | Machine id, OS family (`Windows` / `Linux`), the Codex surface, and — only with `REVA_MODEL_CONTEXT=1` — the model slug | local |
 | session | Session id, turn number, and a count of concurrent sessions on this machine | local |

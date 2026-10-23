@@ -90,19 +90,17 @@ marker unset; surface detection itself is tested at the unit level.
 
 ## Rollout
 
-This is version **1.1.0** of the plugin (`.codex-plugin/plugin.json`). An older installed
+This is version **1.0.1** of the plugin (`.codex-plugin/plugin.json`). An older installed
 or cached copy keeps running its own older code, so confirm the installed version before
 concluding how a surface is reported. To reinstall:
 
 ```bash
 codex plugin remove reva-security@reva-plugins
 codex plugin marketplace remove reva-plugins
-
-//check
 codex plugin marketplace add https://github.com/reva-ai/reva-codex-authorization.git
 codex plugin add reva-security@reva-plugins
 ```
-//remove if --config works
+
 Your token stays in `~/.codex/config.toml` under `[reva]` — Codex has no install-time
 `--config` option the plugin can read, so nothing needs re-entering.
 

@@ -125,11 +125,10 @@ Requires **Node.js 18+** and the **Codex CLI**, both on your `PATH` — every ho
 **1. Install the plugin.** From a clone of this repository:
 
 ```bash
-codex plugin marketplace add https://github.com/reva-ai/<repo>.git
-//check
+codex plugin marketplace add https://github.com/reva-ai/reva-codex-authorization.git
 codex plugin add reva-security@reva-plugins 
 ```
-//check remove if --config works
+
 **2. Add your token** to `~/.codex/config.toml`:
 
 ```toml
