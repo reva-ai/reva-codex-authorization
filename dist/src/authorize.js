@@ -77,16 +77,15 @@ async function main() {
             `authorized. Failing closed.`);
     }
     // Codex supplies turn_id on every turn-scoped hook. trace = this turn
-    // (shared by every call the prompt fans out into), span = this tool call.
-    // The span key is tool_name + tool_input, which PostToolUse sees
-    // identically, so the pre/post pair shares one span without either process
-    // having to tell the other anything. loadOrStartTurn only persists what
+    // (shared by every call the prompt fans out into), span = one resource of
+    // this tool call. The span key is tool_name + tool_input + action +
+    // resource (toolSpanKey), which PostToolUse sees identically, so each
+    // resource's pre/post pair shares one span without either process having
+    // to tell the other anything. loadOrStartTurn only persists what
     // turn_id can't give us: the prompt text, the turn ordinal and startedAt.
     const turn = (0, turnCache_1.loadOrStartTurn)(input.session_id, input.turn_id, dataDir);
     const traceId = (0, trace_1.buildTraceId)(input.turn_id);
-    const spanId = (0, trace_1.deriveSpanId)(traceId, `tool:${input.tool_name}:${JSON.stringify(input.tool_input || {})}`);
-    const traceSession = (0, trace_1.buildSessionContext)(input.session_id, spanId, traceId);
-    const traceparent = (0, trace_1.traceparentHeader)(traceSession.traceId, traceSession.spanId);
+    const traceparentFor = (mapping) => (0, trace_1.traceparentHeader)(traceId, (0, trace_1.deriveSpanId)(traceId, (0, trace_1.toolSpanKey)(input.tool_name, input.tool_input, mapping)));
     // Cumulative spawn count for this turn — only computed (and only
     // increments) for actual spawns, so unrelated tool calls don't advance it.
     const isSpawn = toolMapping.mappings.some((m) => m.actionName === 'spawn');
@@ -139,7 +138,7 @@ async function main() {
             transmission,
             session,
         };
-        return { mapping, request };
+        return { mapping, request, traceparent: traceparentFor(mapping) };
     });
     // If this action IS a spawn, queue the lineage the resulting subagent
     // should inherit — see hopChain.ts for why this is a FIFO queue and what
@@ -155,7 +154,7 @@ async function main() {
         };
         (0, hopChain_1.enqueuePendingSpawnLineage)(input.session_id, hops, spawnHop, dataDir);
     }
-    const aggregate = await (0, evaluateAll_1.evaluateAll)(cfg, requests, traceparent, dataDir, input.session_id);
+    const aggregate = await (0, evaluateAll_1.evaluateAll)(cfg, requests, dataDir, input.session_id);
     (0, debug_1.debugLog)(`<= PreToolUse outcome=${aggregate.outcome}`);
     switch (aggregate.outcome) {
         case 'deny':

@@ -33,10 +33,11 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CLI_ENTRYPOINT = exports.UNKNOWN_ENTRYPOINT = exports.MISSING_ACCOUNT_ID_MESSAGE = void 0;
+exports.IDE_ENTRYPOINT_PREFIX = exports.IDE_ENTRYPOINT = exports.CLI_ENTRYPOINT = exports.UNKNOWN_ENTRYPOINT = exports.MISSING_ACCOUNT_ID_MESSAGE = void 0;
 exports.readCodexAccountId = readCodexAccountId;
 exports.readCodexAccountEmail = readCodexAccountEmail;
 exports.resolveUserEmail = resolveUserEmail;
+exports.resolveEditor = resolveEditor;
 exports.resolveSessionEntrypoint = resolveSessionEntrypoint;
 exports.resolveAgentContext = resolveAgentContext;
 const fs = __importStar(require("node:fs"));
@@ -236,29 +237,98 @@ function resolveUserEmail() {
 // wrong-but-plausible label in a field policies match on.
 //
 // KNOWN IMPRECISION: `codex exec` runs through the same launcher, so it is
-// reported as 'codex-cli' too. codex-rs's SessionSource distinguishes Cli
+// reported as 'cli' too. codex-rs's SessionSource distinguishes Cli
 // from Exec, but that enum is not exposed to hook processes; from the
 // launcher's point of view both are the CLI package.
+//
+// IDE: Codex running inside an editor — typed into the editor's integrated
+// terminal, or driven by the Codex extension's chat panel — reports
+// 'ide-<editor>' ('ide-vscode', 'ide-cursor', 'ide-windsurf'). Both cases
+// get the same value; the agent itself is already named by agentType.
+//
+// Being in an editor is detected from two markers the editor itself sets:
+//   - TERM_PROGRAM=vscode in every integrated-terminal shell (VS Code forks
+//     such as Cursor and Windsurf set the same value, so it cannot name the
+//     editor; a multiplexer like tmux inside the terminal overwrites it);
+//   - VSCODE_CODE_CACHE_PATH in the extension host, which the Codex
+//     extension passes on to the codex process it spawns.
+// Which editor is read from the editor's user-data folder — see
+// resolveEditor(). The extension's own originator ('codex_vscode') is the
+// same constant in every editor, so it is not used.
+//
+// The editor check runs BEFORE the originator: the extension sets an
+// originator too, and this ordering is what lets the plugin ignore it.
+// Accepted edge: a desktop app started from an editor's terminal inherits
+// TERM_PROGRAM and reports 'ide-<editor>' rather than 'Codex Desktop'.
+//
+// THESE STRINGS ARE POLICY-VISIBLE: a Cedar policy or dashboard filter
+// matches them exactly, so renaming any of them is a breaking change.
 exports.UNKNOWN_ENTRYPOINT = 'unknown';
-exports.CLI_ENTRYPOINT = 'codex-cli';
+exports.CLI_ENTRYPOINT = 'cli';
+// Inside an editor whose name could not be read. Deliberately no default
+// editor: guessing 'vscode' would mislabel Cursor or Windsurf.
+exports.IDE_ENTRYPOINT = 'ide';
+exports.IDE_ENTRYPOINT_PREFIX = 'ide-';
+function inEditor(env) {
+    return Boolean(env.VSCODE_CODE_CACHE_PATH?.trim()) || env.TERM_PROGRAM?.trim().toLowerCase() === 'vscode';
+}
+// The path segment just before `marker` ('Code' in ...\Code\CachedData\...).
+// Split on both separators so a Windows path parses the same on any OS.
+function segmentBefore(value, marker) {
+    const parts = (value || '').split(/[\\/]+/);
+    const index = parts.findIndex((p) => p.toLowerCase() === marker.toLowerCase());
+    return index > 0 && parts[index - 1].trim() ? parts[index - 1].trim() : undefined;
+}
+// The editor's executable name: Code.exe -> Code, and on macOS
+// "Code Helper (Plugin)" -> Code.
+function executableName(value) {
+    const base = (value || '').split(/[\\/]+/).pop()?.trim() || '';
+    const name = base.replace(/\.exe$/i, '').replace(/ Helper\b.*$/, '').trim();
+    return name || undefined;
+}
+// Which editor, from the user-data folder each editor keeps its state in
+// ("Code", "Code - Insiders", "Cursor", "Windsurf" — the same name on
+// Windows, macOS and Linux), with the executable name as a last resort:
+//   extension host: VSCODE_CODE_CACHE_PATH  = ...\Code\CachedData\<hash>
+//   terminal:       VSCODE_GIT_ASKPASS_MAIN = ...\Code\User\globalStorage\...
+//                   VSCODE_GIT_ASKPASS_NODE = ...\Microsoft VS Code\Code.exe
+// Both observed live on VS Code 1.143.1 / Windows. Returns undefined when
+// nothing names the editor (e.g. Git terminal authentication turned off).
+function resolveEditor(env = process.env) {
+    const raw = segmentBefore(env.VSCODE_CODE_CACHE_PATH, 'CachedData') ||
+        segmentBefore(env.VSCODE_GIT_ASKPASS_MAIN, 'User') ||
+        executableName(env.VSCODE_GIT_ASKPASS_NODE);
+    if (!raw)
+        return undefined;
+    const name = raw.toLowerCase().replace(/\s+/g, ' ');
+    if (name === 'code')
+        return 'vscode';
+    if (name === 'code - insiders' || name === 'code-insiders')
+        return 'vscode-insiders';
+    return name.replace(/ /g, '-');
+}
 function resolveSessionEntrypoint(env = process.env) {
-    // 1. A surface that names itself wins, and its value is passed through
-    //    verbatim so a future surface reports itself rather than being
-    //    bucketed into a known one.
+    // 1. Inside an editor: its terminal or the Codex extension's chat panel.
+    if (inEditor(env)) {
+        const editor = resolveEditor(env);
+        return editor ? exports.IDE_ENTRYPOINT_PREFIX + editor : exports.IDE_ENTRYPOINT;
+    }
+    // 2. A surface that names itself, passed through verbatim so a future
+    //    surface reports itself rather than being bucketed into a known one.
     const originator = env.CODEX_INTERNAL_ORIGINATOR_OVERRIDE?.trim();
     if (originator)
         return originator;
-    // 2. Otherwise, the CLI launcher's own marker.
+    // 3. Otherwise, the CLI launcher's own marker.
     const launchedByPackageManager = env.CODEX_MANAGED_PACKAGE_ROOT?.trim() ||
         env.CODEX_MANAGED_BY_NPM?.trim() ||
         env.CODEX_MANAGED_BY_BUN?.trim() ||
         env.CODEX_MANAGED_BY_PNPM?.trim();
     if (launchedByPackageManager)
         return exports.CLI_ENTRYPOINT;
-    // 3. Nothing detectable. Let the operator declare it, because on some
+    // 4. Nothing detectable. Let the operator declare it, because on some
     //    installs there is genuinely nothing to detect: a Homebrew or
     //    direct-download Codex runs no launcher wrapper, so neither marker
-    //    above exists. Observed live — the same build reports 'codex-cli' on an
+    //    above exists. Observed live — the same build reports 'cli' on an
     //    npm install and 'unknown' on a Homebrew one.
     //
     //    DELIBERATELY LAST, not first. As a fallback it only fills a real gap;
@@ -268,7 +338,7 @@ function resolveSessionEntrypoint(env = process.env) {
     const declared = env.REVA_SESSION_ENTRYPOINT?.trim();
     if (declared)
         return declared;
-    // 4. Nothing detected and nothing declared — say so rather than guess.
+    // 5. Nothing detected and nothing declared — say so rather than guess.
     return exports.UNKNOWN_ENTRYPOINT;
 }
 // Codex populates agent_id/agent_type on the hook input when a tool call

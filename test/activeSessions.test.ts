@@ -164,13 +164,13 @@ test('markSessionInactive removes a session immediately, not after the 10-minute
 test('markSessionInactive only removes the given session, leaving others untouched', () => {
   withTempDir((dir) => {
     markSessionActive('agent-1', 'sess-1', 'cli', dir);
-    markSessionActive('agent-1', 'sess-2', 'codex-cli', dir);
+    markSessionActive('agent-1', 'sess-2', 'cli', dir);
 
     markSessionInactive('agent-1', 'sess-1', dir);
 
     assert.equal(getActiveSessionCount('agent-1', dir), 1);
     assert.equal(getSessionEntry('agent-1', 'sess-1', dir), undefined);
-    assert.equal(getSessionEntry('agent-1', 'sess-2', dir)?.entrypoint, 'codex-cli');
+    assert.equal(getSessionEntry('agent-1', 'sess-2', dir)?.entrypoint, 'cli');
   });
 });
 

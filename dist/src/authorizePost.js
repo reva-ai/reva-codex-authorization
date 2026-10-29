@@ -55,12 +55,11 @@ async function main() {
         (0, hookOutput_1.passThroughAndExit)();
     }
     const turn = (0, turnCache_1.loadOrStartTurn)(input.session_id, input.turn_id, dataDir);
-    // trace = this turn, span = this tool call. Same key PreToolUse used, so
-    // the pair shares one span without shared state.
+    // trace = this turn, span = one resource of this tool call. Same key
+    // (tool_name + tool_input + action + resource) PreToolUse used, so each
+    // resource's pair shares one span without shared state.
     const traceId = (0, trace_1.buildTraceId)(input.turn_id);
-    const spanId = (0, trace_1.deriveSpanId)(traceId, `tool:${input.tool_name}:${JSON.stringify(input.tool_input || {})}`);
-    const traceSession = (0, trace_1.buildSessionContext)(input.session_id, spanId, traceId);
-    const traceparent = (0, trace_1.traceparentHeader)(traceSession.traceId, traceSession.spanId);
+    const traceparentFor = (mapping) => (0, trace_1.traceparentHeader)(traceId, (0, trace_1.deriveSpanId)(traceId, (0, trace_1.toolSpanKey)(input.tool_name, input.tool_input, mapping)));
     const userEmail = (0, identity_1.resolveUserEmail)();
     const userDescriptor = (0, entity_1.buildEntityDescriptor)('User', userEmail);
     const subjectDescriptor = agentCtx.isSubAgent
@@ -100,10 +99,10 @@ async function main() {
             transmission,
             session,
         };
-        return { mapping, request };
+        return { mapping, request, traceparent: traceparentFor(mapping) };
     });
     (0, debug_1.debugLog)(`-> post ${input.tool_name} (turn=${input.turn_id}, resources=${requests.length}, hops=${hops.length})`);
-    const aggregate = await (0, evaluateAll_1.evaluateAll)(cfg, requests, traceparent, dataDir, input.session_id);
+    const aggregate = await (0, evaluateAll_1.evaluateAll)(cfg, requests, dataDir, input.session_id);
     (0, debug_1.debugLog)(`<= PostToolUse outcome=${aggregate.outcome}`);
     switch (aggregate.outcome) {
         case 'deny':

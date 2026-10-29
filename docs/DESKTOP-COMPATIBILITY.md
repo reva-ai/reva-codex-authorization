@@ -90,7 +90,7 @@ marker unset; surface detection itself is tested at the unit level.
 
 ## Rollout
 
-This is version **1.0.1** of the plugin (`.codex-plugin/plugin.json`). An older installed
+This is version **1.0.2** of the plugin (`.codex-plugin/plugin.json`). An older installed
 or cached copy keeps running its own older code, so confirm the installed version before
 concluding how a surface is reported. To reinstall:
 

@@ -305,6 +305,15 @@ function isPathCandidate(token, cwd) {
         return false;
     if (existsSafe(resolveAgainst(cwd, token)))
         return true;
+    // Whitespace inside a token only survives scanSegments when it was quoted,
+    // and a quoted string with spaces is far more often a message
+    // (Write-Output "Deleted D:\drivers successfully.") than a path. Such a
+    // token is REJECTED when its parent directory does not exist; when it does,
+    // it still has to pass the ordinary checks below. An existing parent alone
+    // is not enough: a message with no separator ('Delete failed: folder still
+    // exists') resolves into the working directory, which always exists.
+    if (/\s/.test(token) && !existsSafe(path.dirname(resolveAgainst(cwd, token))))
+        return false;
     // Characters that appear in expressions, redirections and regexes but
     // effectively never in a path that does not already exist.
     if (/[()'"=|<>;&{}]/.test(token))
@@ -313,7 +322,8 @@ function isPathCandidate(token, cwd) {
         return true;
     const base = baseName(token);
     const dot = base.lastIndexOf('.');
-    return dot > 0 && dot < base.length - 1;
+    // An extension never contains whitespace ('Done. See log' is not one).
+    return dot > 0 && dot < base.length - 1 && !/\s/.test(base.slice(dot + 1));
 }
 // Every distinct filesystem path a shell command appears to touch, deduped
 // by resolved absolute path and preserving first-seen order.

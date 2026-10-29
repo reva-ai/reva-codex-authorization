@@ -18,7 +18,7 @@ interface Recorded {
 
 async function runSessionStart(
   input: Record<string, unknown>,
-  options: { codexConfig?: string; dataDir?: string; entityExists?: boolean } = {},
+  options: { codexConfig?: string; dataDir?: string; entityExists?: boolean; env?: Record<string, string> } = {},
 ): Promise<{ code: number | null; calls: Recorded[]; dataDir: string }> {
   const calls: Recorded[] = [];
   const server = http.createServer((req, res) => {
@@ -73,6 +73,13 @@ async function runSessionStart(
         REVA_POLICY_STORE_ID: '',
         CODEX_INTERNAL_ORIGINATOR_OVERRIDE: process.env.CODEX_INTERNAL_ORIGINATOR_OVERRIDE ?? '',
         CODEX_MANAGED_PACKAGE_ROOT: process.env.CODEX_MANAGED_PACKAGE_ROOT ?? '',
+        // Running the suite from VS Code (its terminal or an extension) sets
+        // these; a test that wants an editor passes them in options.env.
+        TERM_PROGRAM: '',
+        VSCODE_CODE_CACHE_PATH: '',
+        VSCODE_GIT_ASKPASS_MAIN: '',
+        VSCODE_GIT_ASKPASS_NODE: '',
+        ...options.env,
         REVA_HOST: `127.0.0.1:${address.port}`,
         REVA_AUTH_TOKEN: 'test-token',
         REVA_AGENT_ID: 'machine-1',
@@ -228,7 +235,7 @@ test('a desktop session records its surface, not a hardcoded CLI label', async (
   assert.equal(state.sessions['sess-1'].entrypoint, 'Codex Desktop');
 });
 
-test('a CLI session records codex-cli, not unknown', async (t) => {
+test('a CLI session records cli, not unknown', async (t) => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'reva-ss-'));
   t.after(() => fs.rmSync(dataDir, { recursive: true, force: true }));
   const previous = process.env.CODEX_MANAGED_PACKAGE_ROOT;
@@ -240,5 +247,33 @@ test('a CLI session records codex-cli, not unknown', async (t) => {
 
   await runSessionStart(input, { dataDir });
   const state = JSON.parse(fs.readFileSync(path.join(dataDir, 'active-sessions', 'machine-1.json'), 'utf8'));
-  assert.equal(state.sessions['sess-1'].entrypoint, 'codex-cli');
+  assert.equal(state.sessions['sess-1'].entrypoint, 'cli');
+});
+
+test("a session from VS Code's terminal records ide-vscode", async (t) => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'reva-ss-'));
+  t.after(() => fs.rmSync(dataDir, { recursive: true, force: true }));
+  await runSessionStart(input, {
+    dataDir,
+    env: {
+      TERM_PROGRAM: 'vscode',
+      VSCODE_GIT_ASKPASS_MAIN: 'C:\\Users\\dev\\AppData\\Roaming\\Code\\User\\globalStorage\\vscode.git\\askpass-main.js',
+    },
+  });
+  const state = JSON.parse(fs.readFileSync(path.join(dataDir, 'active-sessions', 'machine-1.json'), 'utf8'));
+  assert.equal(state.sessions['sess-1'].entrypoint, 'ide-vscode');
+});
+
+test('a session from the Codex extension chat panel records ide-vscode too', async (t) => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'reva-ss-'));
+  t.after(() => fs.rmSync(dataDir, { recursive: true, force: true }));
+  await runSessionStart(input, {
+    dataDir,
+    env: {
+      CODEX_INTERNAL_ORIGINATOR_OVERRIDE: 'codex_vscode',
+      VSCODE_CODE_CACHE_PATH: 'C:\\Users\\dev\\AppData\\Roaming\\Code\\CachedData\\e646868227',
+    },
+  });
+  const state = JSON.parse(fs.readFileSync(path.join(dataDir, 'active-sessions', 'machine-1.json'), 'utf8'));
+  assert.equal(state.sessions['sess-1'].entrypoint, 'ide-vscode');
 });

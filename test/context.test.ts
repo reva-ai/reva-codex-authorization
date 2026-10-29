@@ -11,7 +11,7 @@ import {
 import { AGENT_TYPE } from '../src/ingestionClient';
 import { CedarActionMapping, CedarHop } from '../src/types';
 
-const session = { sessionId: 'sess-1', entrypoint: 'codex-cli', lastSeen: 1234 };
+const session = { sessionId: 'sess-1', entrypoint: 'cli', lastSeen: 1234 };
 
 function mapping(actionName: CedarActionMapping['actionName'], extra: Partial<CedarActionMapping> = {}): CedarActionMapping {
   return { actionName, resourceType: 'File', resourceId: 'repo/a.ts', ...extra };
@@ -86,7 +86,7 @@ test('session scalars ride on every action, defaulting to empty rather than unde
   const ctx = buildActionContext(mapping('write'), { activeSessionCount: 2, currentSession: session });
   assert.equal(ctx.activeSessionCount, 2);
   assert.equal(ctx.sessionId, 'sess-1');
-  assert.equal(ctx.sessionEntryPoint, 'codex-cli');
+  assert.equal(ctx.sessionEntryPoint, 'cli');
   assert.equal(ctx.sessionLastSeen, 1234);
 
   const bare = buildActionContext(mapping('write'));

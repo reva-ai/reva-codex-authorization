@@ -12,11 +12,12 @@ import { SessionContext } from './types';
 //   trace   — one user turn. Derived from Codex's required `turn_id`
 //             (sha256(turn_id).slice(0,32)), so every hook in that turn
 //             agrees without shared state. The next turn gets a new one.
-//   span    — one operation inside the turn. Derived, not random, so the
-//             PreToolUse and PostToolUse halves of the SAME tool call land
-//             on the same span: both hooks see identical tool_name and
-//             tool_input, so both compute the same value with no shared
-//             state. See deriveSpanId's own note on the collision this
+//   span    — one operation inside the turn: for a tool call, one resource
+//             of that call. Derived, not random, so the PreToolUse and
+//             PostToolUse halves for the SAME resource land on the same span:
+//             both hooks see identical tool_name and tool_input and map them
+//             to the same resources, so both compute the same value with no
+//             shared state. See deriveSpanId's own note on the collision this
 //             accepts.
 //
 // Before this, traceId was a hash of session_id (constant for the entire
@@ -35,10 +36,10 @@ export function buildTraceId(turnId: string): string {
 // 16 hex chars, W3C traceparent parent-id (span). Derived from the trace plus
 // a caller-supplied key describing the operation.
 //
-// The key for a tool call is tool_name + tool_input, which PreToolUse and
-// PostToolUse both have and which are identical between them — that is what
-// makes the pair share a span without any state passing between the two
-// processes.
+// The key for a tool call is tool_name + tool_input + action + resource (see
+// toolSpanKey), which PreToolUse and PostToolUse both have and which are
+// identical between them — that is what makes each pair share a span without
+// any state passing between the two processes.
 //
 // Accepted consequence: two genuinely separate calls with identical input in
 // one turn (the same bash command run twice) collapse onto one span. They
@@ -46,6 +47,26 @@ export function buildTraceId(turnId: string): string {
 // distinguishable from each other within it.
 export function deriveSpanId(traceId: string, key: string): string {
   return createHash('sha256').update(`${traceId}:${key}`).digest('hex').slice(0, 16);
+}
+
+// The span key for ONE RESOURCE of a tool call. A single call can map to
+// several resources (`cd /repo && rm test.js` -> Directory:repo and
+// File:test.js; one apply_patch can name several files), and PreToolUse sends
+// one request per resource. Sharing one span across them made the decision
+// log pair the second PRE request with the first and label it Post-Tool, even
+// when PostToolUse never ran. One span per resource fixes that: PostToolUse
+// maps the same input to the same resources, so each pre/post pair still
+// meets on one span without shared state.
+//
+// Keyed on resourceId, NOT resourceType: a path the call deletes can classify
+// differently afterwards (File before, Directory after, once it no longer
+// exists to stat), which would split that pair across two spans.
+export function toolSpanKey(
+  toolName: string,
+  toolInput: Record<string, any> | undefined,
+  mapping: { actionName: string; resourceId: string },
+): string {
+  return `tool:${toolName}:${JSON.stringify(toolInput || {})}:${mapping.actionName}:${mapping.resourceId}`;
 }
 
 export function buildSessionContext(sessionId: string, spanId: string, traceId: string, id?: string): SessionContext {

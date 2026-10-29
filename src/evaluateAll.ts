@@ -40,13 +40,14 @@ function describe(mapping: CedarActionMapping): string {
 
 export async function evaluateAll(
   cfg: RevaConfig,
-  requests: { mapping: CedarActionMapping; request: CedarRequest }[],
-  traceparent: string,
+  // Each request carries its own traceparent: one span per resource, so the
+  // decision log pairs every resource's pre and post records separately.
+  requests: { mapping: CedarActionMapping; request: CedarRequest; traceparent: string }[],
   pluginDataDir?: string,
   threadId?: string,
 ): Promise<AggregateResult> {
   const evaluated: EvaluatedResource[] = await Promise.all(
-    requests.map(async ({ mapping, request }) => ({
+    requests.map(async ({ mapping, request, traceparent }) => ({
       mapping,
       result: await evaluate(cfg, request, traceparent, pluginDataDir, threadId),
     })),

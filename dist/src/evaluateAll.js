@@ -6,8 +6,11 @@ const rtgClient_1 = require("./rtgClient");
 function describe(mapping) {
     return `${mapping.actionName} on ${mapping.resourceType}:${mapping.resourceId}`;
 }
-async function evaluateAll(cfg, requests, traceparent, pluginDataDir, threadId) {
-    const evaluated = await Promise.all(requests.map(async ({ mapping, request }) => ({
+async function evaluateAll(cfg, 
+// Each request carries its own traceparent: one span per resource, so the
+// decision log pairs every resource's pre and post records separately.
+requests, pluginDataDir, threadId) {
+    const evaluated = await Promise.all(requests.map(async ({ mapping, request, traceparent }) => ({
         mapping,
         result: await (0, rtgClient_1.evaluate)(cfg, request, traceparent, pluginDataDir, threadId),
     })));

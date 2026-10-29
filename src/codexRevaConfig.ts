@@ -12,6 +12,18 @@ export type CodexRevaConfig = {
 // Understands only:
 //   [reva]              auth_token / agent_id / debug / host (and REVA_* / camelCase aliases)
 //   [reva.env]          REVA_AUTH_TOKEN / REVA_AGENT_ID / REVA_DEBUG / REVA_HOST
+// plus, for auth_token ONLY, three fallback placements users reach for when
+// they skip the [reva] header:
+//   top of the file (before any [header])
+//   [plugins."reva-security@reva-plugins"]   next to enabled = true
+//   [marketplaces.reva-plugins]
+// Those two tables are this plugin's own, so an auth_token there can only
+// mean ours. auth_token under ANY other table is deliberately ignored — under
+// [mcp_servers.x] it may be that server's credential, and must never be sent
+// to Reva. Confirmed live on Codex 0.162.1 that Codex itself accepts the
+// extra key in both tables, but `codex plugin remove` / `codex plugin
+// marketplace remove` delete the table, token included — hence [reva] stays
+// the documented place and these are fallbacks only.
 // Same posture as mcpConfig.ts: skip anything not confidently understood.
 // `configPath` is for tests; production uses codexConfigPath() (~/.codex/config.toml).
 
@@ -49,17 +61,33 @@ function isTruthy(raw: string | undefined): boolean {
   return v !== '' && v !== '0' && v !== 'false';
 }
 
+// Table names compared with quotes and whitespace stripped, so
+// [plugins."reva-security@reva-plugins"], [plugins.'reva-security@reva-plugins']
+// and [marketplaces."reva-plugins"] all match. Safe for these two names
+// specifically: neither contains a dot inside its quoted segment.
+const PLUGIN_TABLE = 'plugins.reva-security@reva-plugins';
+const MARKETPLACE_TABLE = 'marketplaces.reva-plugins';
+
+function normalizeTableName(name: string): string {
+  return name.replace(/["'\s]/g, '');
+}
+
+type Section = 'top' | 'other' | 'reva' | 'reva.env' | 'plugin' | 'marketplace';
+
 export function parseRevaToml(tomlText: string): CodexRevaConfig {
   const reva: Record<string, string> = {};
   const revaEnv: Record<string, string> = {};
-  let section: 'none' | 'reva' | 'reva.env' = 'none';
+  const fallbackToken: Partial<Record<'top' | 'plugin' | 'marketplace', string>> = {};
+  // Keys before the first header are top-level; once any header is seen,
+  // nothing is top-level again for the rest of the file.
+  let section: Section = 'top';
 
   for (const rawLine of tomlText.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line || line.startsWith('#')) continue;
 
     if (line.startsWith('[')) {
-      section = 'none';
+      section = 'other';
       const close = line.indexOf(']');
       if (close < 0 || line.startsWith('[[')) continue;
       const trailing = line.slice(close + 1).trim();
@@ -67,14 +95,17 @@ export function parseRevaToml(tomlText: string): CodexRevaConfig {
       const name = line.slice(1, close).trim();
       if (name === 'reva') section = 'reva';
       else if (name === 'reva.env') section = 'reva.env';
+      else if (normalizeTableName(name) === PLUGIN_TABLE) section = 'plugin';
+      else if (normalizeTableName(name) === MARKETPLACE_TABLE) section = 'marketplace';
       continue;
     }
 
-    if (section === 'none') continue;
+    if (section === 'other') continue;
     const parsed = parseQuotedAssignment(line);
     if (!parsed) continue;
     if (section === 'reva') reva[parsed.key] = parsed.value;
-    else revaEnv[parsed.key] = parsed.value;
+    else if (section === 'reva.env') revaEnv[parsed.key] = parsed.value;
+    else if (parsed.key === 'auth_token') fallbackToken[section] = parsed.value;
   }
 
   const debugRaw = pickString(revaEnv.REVA_DEBUG, reva.debug, reva.REVA_DEBUG);
@@ -85,6 +116,9 @@ export function parseRevaToml(tomlText: string): CodexRevaConfig {
       reva.auth_token,
       reva.authToken,
       reva.REVA_AUTH_TOKEN,
+      fallbackToken.plugin,
+      fallbackToken.marketplace,
+      fallbackToken.top,
     ),
     host: pickString(revaEnv.REVA_HOST, reva.host, reva.REVA_HOST),
     agentId: pickString(

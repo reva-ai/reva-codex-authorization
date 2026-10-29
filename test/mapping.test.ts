@@ -390,3 +390,70 @@ test('extractShellTargets returns absolute, deduped paths in first-seen order', 
   assert.equal(targets.length, 2);
   for (const target of targets) assert.ok(path.isAbsolute(target));
 });
+
+// Reproduces the D:\drivers deletion from a live Codex session: one
+// delete-and-verify script whose quoted status messages contain a path.
+test('quoted status messages containing a path are not resources', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'reva-msg-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const drivers = path.join(root, 'drivers');
+  fs.mkdirSync(drivers);
+  const command =
+    `Remove-Item -Recurse -Force ${drivers}\n` +
+    `if (Test-Path ${drivers}) { Write-Output "Deletion verification failed: ${drivers} still exists." } ` +
+    `else { Write-Output "Deleted ${drivers} successfully." }`;
+  assert.deepEqual(extractShellTargets(command, root), [drivers]);
+});
+
+test('a quoted message with a path is dropped for echo and Write-Host too', (t) => {
+  const repo = makeRepo();
+  t.after(repo.cleanup);
+  const dir = path.join(repo.root, 'routes');
+  assert.deepEqual(extractShellTargets(`echo "Removed ${dir} successfully."`, repo.root), []);
+  assert.deepEqual(extractShellTargets(`Write-Host 'Cleaned ${dir} now'`, repo.root), []);
+});
+
+test('an existing quoted path with spaces is still a resource', (t) => {
+  const repo = makeRepo();
+  t.after(repo.cleanup);
+  const spaced = path.join(repo.root, 'Program Files');
+  fs.mkdirSync(spaced);
+  fs.writeFileSync(path.join(spaced, 'app.exe'), '', 'utf8');
+  assert.deepEqual(extractShellTargets(`Remove-Item "${path.join(spaced, 'app.exe')}"`, repo.root), [
+    path.join(spaced, 'app.exe'),
+  ]);
+});
+
+test('a NEW quoted file with spaces under an existing folder is still a resource', (t) => {
+  const repo = makeRepo();
+  t.after(repo.cleanup);
+  const target = path.join(repo.root, 'routes', 'new file.js');
+  assert.deepEqual(extractShellTargets(`Set-Content "${target}" "x"`, repo.root), [target]);
+});
+
+test('a relative quoted path with spaces in the cwd is still a resource', (t) => {
+  const repo = makeRepo();
+  t.after(repo.cleanup);
+  assert.deepEqual(extractShellTargets(`New-Item "my notes.txt"`, repo.root), [path.join(repo.root, 'my notes.txt')]);
+});
+
+// Reproduces the D:\namasteReact deletion from a live Codex session: bare
+// PowerShell string output, no path separator inside the message.
+test('a quoted message with no separator is not a resource, even though cwd exists', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'reva-msg2-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const target = path.join(root, 'namasteReact');
+  fs.mkdirSync(target);
+  const command =
+    `Remove-Item -LiteralPath '${target}' -Recurse -Force; if (Test-Path -LiteralPath '${target}') ` +
+    `{ 'Delete failed: folder still exists' } else { 'Deleted: ${target}' }`;
+  assert.deepEqual(extractShellTargets(command, root), [target]);
+  assert.deepEqual(extractShellTargets(`Write-Output 'Done. See log'`, root), []);
+});
+
+test('a NEW quoted folder with spaces under an existing folder is still a resource', (t) => {
+  const repo = makeRepo();
+  t.after(repo.cleanup);
+  const target = path.join(repo.root, 'routes', 'New Folder');
+  assert.deepEqual(extractShellTargets(`New-Item -ItemType Directory "${target}"`, repo.root), [target]);
+});

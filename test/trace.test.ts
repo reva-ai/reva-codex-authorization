@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildSessionContext, buildTraceId, deriveSpanId, traceparentHeader } from '../src/trace';
+import { buildSessionContext, buildTraceId, deriveSpanId, toolSpanKey, traceparentHeader } from '../src/trace';
 
 const TOOL_KEY = 'tool:Bash:{"command":"npm test"}';
 const OTHER_KEY = 'tool:Bash:{"command":"npm run build"}';
@@ -63,4 +63,31 @@ test('session context id defaults to the session id and can be overridden', () =
   assert.equal(buildSessionContext('sess-1', 'aaaaaaaaaaaaaaaa', traceId).id, 'sess-1');
   assert.equal(buildSessionContext('sess-1', 'aaaaaaaaaaaaaaaa', traceId, 'other').id, 'other');
   assert.equal(buildSessionContext('sess-1', 'aaaaaaaaaaaaaaaa', traceId).traceId, traceId);
+});
+
+test('toolSpanKey: each resource of one tool call gets its own key', () => {
+  const input = { command: 'cd /repo && rm test.js' };
+  const dir = toolSpanKey('Bash', input, { actionName: 'executeBash', resourceId: 'repo' });
+  const file = toolSpanKey('Bash', input, { actionName: 'executeBash', resourceId: 'repo/test.js' });
+  assert.notEqual(dir, file);
+  const traceId = buildTraceId('turn-a');
+  assert.notEqual(deriveSpanId(traceId, dir), deriveSpanId(traceId, file));
+});
+
+test('toolSpanKey: stable for the same input, so pre and post meet on one span', () => {
+  // PreToolUse and PostToolUse build the key in separate processes.
+  const mapping = { actionName: 'executeBash', resourceId: 'repo/a.txt' };
+  assert.equal(
+    toolSpanKey('Bash', { command: 'cat a.txt' }, mapping),
+    toolSpanKey('Bash', { command: 'cat a.txt' }, { ...mapping }),
+  );
+  assert.equal(toolSpanKey('Bash', undefined, mapping), toolSpanKey('Bash', {}, mapping));
+});
+
+test('toolSpanKey: differs by action for the same path', () => {
+  const input = { patch: '...' };
+  assert.notEqual(
+    toolSpanKey('apply_patch', input, { actionName: 'write', resourceId: 'repo/a.ts' }),
+    toolSpanKey('apply_patch', input, { actionName: 'edit', resourceId: 'repo/a.ts' }),
+  );
 });

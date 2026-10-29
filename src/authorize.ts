@@ -13,7 +13,7 @@ import { triggerMcpIngestionForInvokedServer } from './mcpIngestionTrigger';
 import { resolveDataDir } from './pluginPaths';
 import { nextSpawnIndex } from './spawnCounter';
 import { readStdin } from './stdin';
-import { buildSessionContext, buildTraceId, deriveSpanId, traceparentHeader } from './trace';
+import { buildTraceId, deriveSpanId, toolSpanKey, traceparentHeader } from './trace';
 import { CedarEntityDescriptor, CedarHop, CedarRequest, PreToolUseInput } from './types';
 import { conversationFromTurn, directSessionFromTurn, loadOrStartTurn } from './turnCache';
 
@@ -89,16 +89,16 @@ async function main(): Promise<void> {
   }
 
   // Codex supplies turn_id on every turn-scoped hook. trace = this turn
-  // (shared by every call the prompt fans out into), span = this tool call.
-  // The span key is tool_name + tool_input, which PostToolUse sees
-  // identically, so the pre/post pair shares one span without either process
-  // having to tell the other anything. loadOrStartTurn only persists what
+  // (shared by every call the prompt fans out into), span = one resource of
+  // this tool call. The span key is tool_name + tool_input + action +
+  // resource (toolSpanKey), which PostToolUse sees identically, so each
+  // resource's pre/post pair shares one span without either process having
+  // to tell the other anything. loadOrStartTurn only persists what
   // turn_id can't give us: the prompt text, the turn ordinal and startedAt.
   const turn = loadOrStartTurn(input.session_id, input.turn_id, dataDir);
   const traceId = buildTraceId(input.turn_id);
-  const spanId = deriveSpanId(traceId, `tool:${input.tool_name}:${JSON.stringify(input.tool_input || {})}`);
-  const traceSession = buildSessionContext(input.session_id, spanId, traceId);
-  const traceparent = traceparentHeader(traceSession.traceId, traceSession.spanId);
+  const traceparentFor = (mapping: { actionName: string; resourceId: string }): string =>
+    traceparentHeader(traceId, deriveSpanId(traceId, toolSpanKey(input.tool_name, input.tool_input, mapping)));
 
   // Cumulative spawn count for this turn — only computed (and only
   // increments) for actual spawns, so unrelated tool calls don't advance it.
@@ -163,7 +163,7 @@ async function main(): Promise<void> {
       transmission,
       session,
     };
-    return { mapping, request };
+    return { mapping, request, traceparent: traceparentFor(mapping) };
   });
 
   // If this action IS a spawn, queue the lineage the resulting subagent
@@ -181,7 +181,7 @@ async function main(): Promise<void> {
     enqueuePendingSpawnLineage(input.session_id, hops, spawnHop, dataDir);
   }
 
-  const aggregate = await evaluateAll(cfg, requests, traceparent, dataDir, input.session_id);
+  const aggregate = await evaluateAll(cfg, requests, dataDir, input.session_id);
   debugLog(`<= PreToolUse outcome=${aggregate.outcome}`);
 
   switch (aggregate.outcome) {

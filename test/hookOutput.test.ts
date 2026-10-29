@@ -106,6 +106,8 @@ async function runHook(
         CODEX_INTERNAL_ORIGINATOR_OVERRIDE: '',
         CODEX_MANAGED_PACKAGE_ROOT: '',
         CODEX_MANAGED_BY_NPM: '',
+        TERM_PROGRAM: '',
+        VSCODE_CODE_CACHE_PATH: '',
         ...options.env,
       },
       stdio: ['pipe', 'pipe', 'pipe'],

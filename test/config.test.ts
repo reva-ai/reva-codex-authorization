@@ -168,6 +168,97 @@ REVA_AUTH_TOKEN = "env-block"
   assert.equal(parsed.authToken, 'env-block');
 });
 
+test('reads auth_token from the top of the file, before any header', () => {
+  const parsed = parseRevaToml(`
+auth_token = "top"
+model = "gpt-5"
+[tui]
+screen_reader_detection_done = true
+`);
+  assert.equal(parsed.authToken, 'top');
+});
+
+test('reads auth_token next to enabled = true in the plugin table', () => {
+  const parsed = parseRevaToml(`
+[plugins."reva-security@reva-plugins"]
+enabled = true
+auth_token = "plugin"
+`);
+  assert.equal(parsed.authToken, 'plugin');
+});
+
+test('reads auth_token inside the marketplace table, quoted or bare', () => {
+  assert.equal(
+    parseRevaToml(`
+[marketplaces.reva-plugins]
+source_type = "git"
+source = "https://github.com/reva-ai/reva-codex-authorization.git"
+auth_token = "market"
+`).authToken,
+    'market',
+  );
+  assert.equal(parseRevaToml(`[marketplaces."reva-plugins"]\nauth_token = "market-q"`).authToken, 'market-q');
+});
+
+test('ignores auth_token under any other table, including at the end of the file', () => {
+  const parsed = parseRevaToml(`
+[plugins."reva-security@reva-plugins"]
+enabled = true
+
+[mcp_servers.github]
+url = "https://example.com/mcp"
+auth_token = "someone-elses"
+`);
+  assert.equal(parsed.authToken, undefined);
+});
+
+test('ignores auth_token under a different plugin or marketplace', () => {
+  const parsed = parseRevaToml(`
+[plugins."browser@openai-bundled"]
+enabled = true
+auth_token = "not-ours"
+[marketplaces.openai-bundled]
+auth_token = "not-ours-either"
+`);
+  assert.equal(parsed.authToken, undefined);
+});
+
+test('only auth_token is read from the fallback placements', () => {
+  const parsed = parseRevaToml(`
+host = "top.example"
+[plugins."reva-security@reva-plugins"]
+agent_id = "plugin-agent"
+debug = true
+`);
+  assert.deepEqual(parsed, { authToken: undefined, host: undefined, agentId: undefined, debug: undefined });
+});
+
+test('token precedence: [reva.env] > [reva] > plugin table > marketplace table > top of file', () => {
+  const all = {
+    top: 'auth_token = "top"',
+    market: '[marketplaces.reva-plugins]\nauth_token = "market"',
+    plugin: '[plugins."reva-security@reva-plugins"]\nauth_token = "plugin"',
+    reva: '[reva]\nauth_token = "reva"',
+    env: '[reva.env]\nREVA_AUTH_TOKEN = "env-block"',
+  };
+  const build = (...parts: string[]) => parseRevaToml(parts.join('\n')).authToken;
+  assert.equal(build(all.top, all.market, all.plugin, all.reva, all.env), 'env-block');
+  assert.equal(build(all.top, all.market, all.plugin, all.reva), 'reva');
+  assert.equal(build(all.top, all.market, all.plugin), 'plugin');
+  assert.equal(build(all.top, all.market), 'market');
+  assert.equal(build(all.top), 'top');
+});
+
+test('a fallback-placed token in config.toml wins over the REVA_AUTH_TOKEN env var', () => {
+  const file = tempConfig(`
+auth_token = "from-top"
+[plugins."reva-security@reva-plugins"]
+enabled = true
+`);
+  const cfg = loadConfig({ REVA_AUTH_TOKEN: 'env-tok', REVA_AGENT_ID: 'agent-t' }, file);
+  assert.equal(cfg.authorization, 'from-top');
+});
+
 test('falls back to env when config.toml has no token', () => {
   const file = tempConfig(`
 [projects."/tmp"]

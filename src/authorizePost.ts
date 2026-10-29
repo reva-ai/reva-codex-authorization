@@ -11,7 +11,7 @@ import { resolveAgentContext, resolveUserEmail } from './identity';
 import { canonicalToolName, mapToolToCedar } from './mapping';
 import { resolveDataDir } from './pluginPaths';
 import { readStdin } from './stdin';
-import { buildSessionContext, buildTraceId, deriveSpanId, traceparentHeader } from './trace';
+import { buildTraceId, deriveSpanId, toolSpanKey, traceparentHeader } from './trace';
 import { CedarEntityDescriptor, CedarRequest, PostToolUseInput } from './types';
 import { conversationFromTurn, directSessionFromTurn, loadOrStartTurn } from './turnCache';
 
@@ -62,12 +62,12 @@ async function main(): Promise<void> {
   }
 
   const turn = loadOrStartTurn(input.session_id, input.turn_id, dataDir);
-  // trace = this turn, span = this tool call. Same key PreToolUse used, so
-  // the pair shares one span without shared state.
+  // trace = this turn, span = one resource of this tool call. Same key
+  // (tool_name + tool_input + action + resource) PreToolUse used, so each
+  // resource's pair shares one span without shared state.
   const traceId = buildTraceId(input.turn_id);
-  const spanId = deriveSpanId(traceId, `tool:${input.tool_name}:${JSON.stringify(input.tool_input || {})}`);
-  const traceSession = buildSessionContext(input.session_id, spanId, traceId);
-  const traceparent = traceparentHeader(traceSession.traceId, traceSession.spanId);
+  const traceparentFor = (mapping: { actionName: string; resourceId: string }): string =>
+    traceparentHeader(traceId, deriveSpanId(traceId, toolSpanKey(input.tool_name, input.tool_input, mapping)));
 
   const userEmail = resolveUserEmail();
   const userDescriptor = buildEntityDescriptor('User', userEmail);
@@ -119,11 +119,11 @@ async function main(): Promise<void> {
       transmission,
       session,
     };
-    return { mapping, request };
+    return { mapping, request, traceparent: traceparentFor(mapping) };
   });
 
   debugLog(`-> post ${input.tool_name} (turn=${input.turn_id}, resources=${requests.length}, hops=${hops.length})`);
-  const aggregate = await evaluateAll(cfg, requests, traceparent, dataDir, input.session_id);
+  const aggregate = await evaluateAll(cfg, requests, dataDir, input.session_id);
   debugLog(`<= PostToolUse outcome=${aggregate.outcome}`);
 
   switch (aggregate.outcome) {
