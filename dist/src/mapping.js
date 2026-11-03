@@ -165,9 +165,9 @@ function findRepoRoot(startDir) {
     }
 }
 // Cedar policies are authored once against a portable id like
-// "domain-services/utility/agents.md" so the same policy applies no matter
+// "my-repo/utility/agents.md" so the same policy applies no matter
 // whose machine or home directory the repo is cloned into — an absolute
-// path like "C:\Users\alice\repos\domain-services\..." is specific to one
+// path like "C:\Users\alice\repos\my-repo\..." is specific to one
 // person's machine and could never be referenced from a policy meant to
 // apply to every developer. Falls back to the raw absolute path only when
 // no git repo root can be found, or the path falls outside it entirely.
@@ -204,7 +204,7 @@ function directoryProperties(portableId) {
 }
 // The RTG expects a FLAT list of every ancestor, not just the immediate
 // parent — Cedar's `in` needs the whole chain present to match a policy
-// like `resource in Directory::"domain-services"` regardless of how deep
+// like `resource in Directory::"my-repo"` regardless of how deep
 // the file actually is. No ancestor chain for the absolute-path fallback
 // (outside any repo) — there's no meaningful Directory/Repository lineage
 // to report for those.
@@ -243,7 +243,11 @@ function resourceMapping(actionName, absolutePath, cwd, forceType, extras = {}) 
 // Quote-aware scan producing one entry per command segment. Segment breaks
 // are ';', '|' and newlines OUTSIDE quotes — critical, because a regex
 // argument like "liked|Like|songRoutes" contains a pipe that must not split
-// the command.
+// the command. Brackets and braces OUTSIDE quotes end a token too, so a
+// quoted path inside an expression — (Resolve-Path 'D:\app').Path, or
+// if (...) { ... } — is seen on its own rather than glued to ').Path' or ')'
+// and rejected. Inside quotes they are kept: 'Program Files (x86)' stays one
+// token.
 function scanSegments(command) {
     const segments = [];
     let tokens = [];
@@ -279,6 +283,10 @@ function scanSegments(command) {
         }
         if (ch === ';' || ch === '|' || ch === '\n' || ch === '\r') {
             endSegment();
+            continue;
+        }
+        if (ch === '(' || ch === ')' || ch === '{' || ch === '}') {
+            endToken();
             continue;
         }
         if (ch === ' ' || ch === '\t') {

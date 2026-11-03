@@ -405,6 +405,27 @@ test('User found -> no re-create, and the two Sets take two separate PATCHes', a
   });
 });
 
+test('no OS machine id -> registeredMachineIds left out of the POST, never sent empty', async () => {
+  await withFetch(stateResponder('not-found'), async (calls) => {
+    await upsertUser(cfg, 'user-type', 'dev@example.com', undefined, 'account-9');
+    const posts = calls.filter((c) => c.method === 'POST');
+    assert.deepEqual(posts[0].body.attributes, [
+      { name: 'active', value: 'false' },
+      { name: 'agents', value: 'account-9' },
+    ]);
+  });
+});
+
+test('no OS machine id -> the registeredMachineIds PATCH is skipped, agents still added', async () => {
+  await withFetch(stateResponder('found'), async (calls) => {
+    await upsertUser(cfg, 'user-type', 'dev@example.com', undefined, 'account-9');
+    assert.deepEqual(
+      calls.filter((c) => c.method === 'PATCH').map((p) => p.body.attributeValue),
+      [{ name: 'agents', value: 'account-9' }],
+    );
+  });
+});
+
 test('a 400 on the existence check means not-found, same as a 404', async () => {
   // Some backends answer an unresolvable id with 400 rather than a clean 404.
   await withFetch(

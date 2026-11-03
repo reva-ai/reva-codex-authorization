@@ -75,10 +75,11 @@ import {
 // machineId is also sent on every action — this machine's own id (see
 // deviceId.ts's resolveMachineId), the same value PATCH-ADDed to
 // User.registeredMachineIds at ingestion. Unlike os, this can't be computed
-// in here: resolving it needs the plugin data directory (for the persisted-
-// random-id fallback), which is an infra concern this file otherwise has
-// no reason to know about — so the caller resolves it and passes the plain
-// value in.
+// in here: resolving it needs the plugin data directory (for the saved copy
+// of the OS id), which is an infra concern this file otherwise has no
+// reason to know about — so the caller resolves it and passes the plain
+// value in. Left out entirely when no real OS id could be read: never sent
+// empty, never invented.
 export interface ActionContextExtras {
   // Cumulative count of subagents spawned so far this turn (1 = first
   // spawn) — only meaningful for, and only sent on, the spawn action.
@@ -133,7 +134,7 @@ function activeSessionFields(extras: ActionContextExtras): Record<string, any> {
     sessionEntryPoint: extras.currentSession?.entrypoint ?? '',
     sessionLastSeen: extras.currentSession?.lastSeen ?? 0,
     agentType: AGENT_TYPE,
-    machineId: extras.machineId ?? '',
+    ...(extras.machineId ? { machineId: extras.machineId } : {}),
     os: osAttribute(),
     // Same everywhere-precedent as agentType, but gated: agentType is a
     // compile-time constant the schema already accepts, whereas `model` is a

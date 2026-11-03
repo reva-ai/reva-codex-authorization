@@ -19,6 +19,11 @@ import { test } from 'node:test';
 //   internal error   -> exit 2 (fail closed)
 // and, on every path, that no rejected field is ever emitted.
 
+// A fixed, obviously fake machine id, saved into each run's data directory so
+// the hooks never depend on the runner having one (GitLab's Alpine image has
+// no /etc/machine-id). deviceId.ts reads this saved copy before the OS.
+const TEST_MACHINE_ID = '00000000-0000-4000-8000-000000000001';
+
 interface HookRun {
   code: number | null;
   stdout: string;
@@ -76,6 +81,7 @@ async function runHook(
   assert.ok(address && typeof address === 'object');
 
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'reva-data-'));
+  fs.writeFileSync(path.join(dataDir, 'machine-id'), TEST_MACHINE_ID);
   try {
     const child = spawn(process.execPath, [path.resolve(__dirname, `../src/${entrypoint}`)], {
       cwd: options.cwd,
@@ -486,7 +492,7 @@ test('end to end: the flag controls context.model in the real outgoing request',
   assert.equal(off.code, 0, off.stderr);
   assert.ok(!('model' in off.requests[0].context), 'model must not be sent by default');
   assert.ok('os' in off.requests[0].context, 'os is sent on every action');
-  assert.ok('machineId' in off.requests[0].context, 'machineId is sent on every action');
+  assert.equal(off.requests[0].context.machineId, TEST_MACHINE_ID, 'machineId is sent on every action');
 
   const on = await runHook('authorize.js', input, ALLOW, { env: { REVA_MODEL_CONTEXT: '1' } });
   assert.equal(on.code, 0, on.stderr);

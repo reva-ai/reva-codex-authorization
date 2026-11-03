@@ -10,6 +10,10 @@ import { test } from 'node:test';
 // This file covers what it actually DOES: the ingestion flow, driven through
 // the real process against a stub of both ingestion endpoints.
 
+// Same as hookOutput.test.ts: a fixed, obviously fake machine id, so the User
+// POST carries registeredMachineIds even on a runner with no OS machine id.
+const TEST_MACHINE_ID = '00000000-0000-4000-8000-000000000001';
+
 interface Recorded {
   method: string;
   pathname: string;
@@ -63,6 +67,7 @@ async function runSessionStart(
   assert.ok(address && typeof address === 'object');
 
   const dataDir = options.dataDir || fs.mkdtempSync(path.join(os.tmpdir(), 'reva-ss-'));
+  fs.writeFileSync(path.join(dataDir, 'machine-id'), TEST_MACHINE_ID);
   try {
     const child = spawn(process.execPath, [path.resolve(__dirname, '../src/sessionStart.js')], {
       env: {
@@ -85,7 +90,9 @@ async function runSessionStart(
         REVA_AGENT_ID: 'machine-1',
         PLUGIN_DATA: dataDir,
         REVA_CODEX_AUTH_PATH: path.join(dataDir, 'no-auth.json'),
-        ...(options.codexConfig ? { CODEX_HOME: path.dirname(options.codexConfig) } : {}),
+        // Always isolated: otherwise the real ~/.codex/config.toml's MCP
+        // servers get registered and add PATCHes these tests don't expect.
+        CODEX_HOME: options.codexConfig ? path.dirname(options.codexConfig) : dataDir,
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -140,6 +147,10 @@ test('a cold start resolves entity types, then ingests User and Agent', async (t
   assert.deepEqual(
     user!.body.attributes.map((a: any) => a.name),
     ['active', 'registeredMachineIds', 'agents'],
+  );
+  assert.equal(
+    user!.body.attributes.find((a: any) => a.name === 'registeredMachineIds').value,
+    TEST_MACHINE_ID,
   );
 
   // The Agent's entityId is the ACCOUNT id (REVA_AGENT_ID here), never the

@@ -150,3 +150,7 @@ Team rollout via managed-settings.json, token rotation, and uninstall are in doc
 | [docs/DESKTOP-COMPATIBILITY.md](docs/DESKTOP-COMPATIBILITY.md) | Which Codex surfaces are governed, how `sessionEntryPoint` is detected, writing policies against it, and why cloud tasks are not covered |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Debug logging, nothing being governed, every action being blocked, specific denials,slow calls, MCP registration |
 | [SECURITY.md](SECURITY.md) | Reporting a vulnerability, exactly what leaves the machine, what blocks, what the plugin does not cover, and a hardening checklist for a team rollout |
+
+## License
+
+[Apache-2.0](LICENSE). See [NOTICE](NOTICE).

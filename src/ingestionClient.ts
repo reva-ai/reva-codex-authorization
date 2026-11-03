@@ -324,10 +324,13 @@ export async function upsertUser(
   cfg: RevaConfig,
   userEntityTypeId: string,
   userEmail: string,
-  machineId: string,
+  machineId: string | undefined,
   accountId: string,
   dataDir?: string,
 ): Promise<void> {
+  // No real OS machine id: registeredMachineIds is left untouched rather
+  // than given an empty or invented value.
+  if (!machineId) debugLog('no OS machine id — registeredMachineIds not updated');
   const state = await getEntityState(cfg, userEntityTypeId, userEmail);
   if (state === 'not-found') {
     // One POST carrying everything, Sets included. There is nothing to
@@ -336,7 +339,7 @@ export async function upsertUser(
     await withEntityTypeRetry(cfg, dataDir, userEntityTypeId, 'userEntityTypeId', (id) =>
       postEntity(cfg, id, userEmail, [
         { name: 'active', value: 'false' },
-        { name: 'registeredMachineIds', value: machineId },
+        ...(machineId ? [{ name: 'registeredMachineIds', value: machineId }] : []),
         { name: 'agents', value: accountId },
       ]),
     ).catch((err) => debugLog(`upsertUser: POST failed — ${err}`));
@@ -344,9 +347,11 @@ export async function upsertUser(
   }
   // 'found' or 'inconclusive' — both take the assume-exists branch. Only the
   // accumulating Sets are updated; `active` is left alone forever.
-  await withEntityTypeRetry(cfg, dataDir, userEntityTypeId, 'userEntityTypeId', (id) =>
-    addAttributeValue(cfg, id, userEmail, { name: 'registeredMachineIds', value: machineId }),
-  ).catch((err) => debugLog(`upsertUser: registeredMachineIds PATCH failed — ${err}`));
+  if (machineId) {
+    await withEntityTypeRetry(cfg, dataDir, userEntityTypeId, 'userEntityTypeId', (id) =>
+      addAttributeValue(cfg, id, userEmail, { name: 'registeredMachineIds', value: machineId }),
+    ).catch((err) => debugLog(`upsertUser: registeredMachineIds PATCH failed — ${err}`));
+  }
   await withEntityTypeRetry(cfg, dataDir, userEntityTypeId, 'userEntityTypeId', (id) =>
     addAttributeValue(cfg, id, userEmail, { name: 'agents', value: accountId }),
   ).catch((err) => debugLog(`upsertUser: agents PATCH failed — ${err}`));

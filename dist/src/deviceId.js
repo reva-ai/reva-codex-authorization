@@ -34,15 +34,15 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.readOsHardwareId = readOsHardwareId;
-exports.persistedFallbackId = persistedFallbackId;
+exports.isMachineId = isMachineId;
+exports.readSavedMachineId = readSavedMachineId;
+exports.saveMachineId = saveMachineId;
 exports.osFamily = osFamily;
 exports.resolveMachineId = resolveMachineId;
 exports.resetMachineIdCacheForTests = resetMachineIdCacheForTests;
 const node_child_process_1 = require("node:child_process");
-const node_crypto_1 = require("node:crypto");
 const fs = __importStar(require("node:fs"));
 const path = __importStar(require("node:path"));
-const pluginPaths_1 = require("./pluginPaths");
 // MACHINE identity — deliberately NOT the Agent's identity.
 //
 // This resolver answers "which physical machine is this", and its only
@@ -56,21 +56,29 @@ const pluginPaths_1 = require("./pluginPaths");
 // silently corrupts whichever downstream attribute actually needed the
 // machine-specific value.
 //
-// Unlike the account id, a machine id legitimately HAS a fallback chain:
-// hardware id -> a locally persisted random id. There is no "real" identity
-// being stood in for — an unidentifiable machine is just an unidentifiable
-// machine, so a stable local id is an honest answer rather than a
-// dishonest stand-in.
+// A machine id is either the OS's real id or absent — never invented. An
+// earlier version fell back to a persisted random UUID whenever the OS read
+// failed (most often a cold-start `reg` timeout), which made one PC show up
+// in User.registeredMachineIds as several "devices". The only local state is
+// a copy of the real id, saved after the first successful read.
 //
 // This reports an honest per-device value; it is device-fingerprinting, not
 // hardware attestation. A malicious client could still misreport it, so
 // "this token can't be used from another machine" has to be enforced in
 // Reva's policies, not here.
+// The first `reg.exe` of a session was measured at ~2.06 s on Windows (later
+// calls ~40 ms), so the old 2000 ms limit timed out on a cold start. 10 s
+// leaves ample headroom; the hook's own timeout still bounds a read that
+// never returns.
+const OS_READ_TIMEOUT_MS = 10000;
+// Copy of the real OS id, saved after the first successful read so later
+// hooks don't need to run `reg`/`ioreg` again.
+const MACHINE_ID_FILE = 'machine-id';
 function readMacHardwareId() {
     try {
         const out = (0, node_child_process_1.execFileSync)('ioreg', ['-rd1', '-c', 'IOPlatformExpertDevice'], {
             encoding: 'utf8',
-            timeout: 2000,
+            timeout: OS_READ_TIMEOUT_MS,
         });
         return out.match(/"IOPlatformUUID"\s*=\s*"([0-9A-Fa-f-]+)"/)?.[1];
     }
@@ -93,17 +101,17 @@ function readLinuxMachineId() {
 }
 function readWindowsMachineGuid() {
     try {
-        const out = (0, node_child_process_1.execFileSync)('reg', ['query', 'HKLM\\SOFTWARE\\Microsoft\\Cryptography', '/v', 'MachineGuid'], { encoding: 'utf8', timeout: 2000 });
+        // Full path, so the read doesn't depend on the hook's PATH.
+        const reg = path.join(process.env.SystemRoot || process.env.windir || 'C:\\Windows', 'System32', 'reg.exe');
+        const out = (0, node_child_process_1.execFileSync)(reg, ['query', 'HKLM\\SOFTWARE\\Microsoft\\Cryptography', '/v', 'MachineGuid'], { encoding: 'utf8', timeout: OS_READ_TIMEOUT_MS, windowsHide: true });
         return out.match(/MachineGuid\s+REG_SZ\s+([0-9A-Fa-f-]+)/)?.[1];
     }
     catch {
         return undefined;
     }
 }
-// Exported directly: the CodingAgent schema's `Agent` entity is
-// hardware-rooted by design (mac hardware UUID on macOS, /etc/machine-id on
-// Linux, MachineGuid on Windows) — this is the primary source for
-// resolveMachineId below, not just an internal fallback.
+// The OS's own machine id: hardware UUID on macOS, /etc/machine-id on Linux,
+// MachineGuid on Windows. The only source for resolveMachineId below.
 function readOsHardwareId() {
     switch (process.platform) {
         case 'darwin':
@@ -116,31 +124,36 @@ function readOsHardwareId() {
             return undefined;
     }
 }
-// Used only when no OS-level hardware id is available (unsupported
-// platform, sandboxed environment, permission denied, etc). Persisted in
-// the plugin data directory when available, which survives plugin updates;
-// otherwise falls back to a dotfile in the home directory.
-function persistedFallbackId(dataDir) {
-    const dir = dataDir || (0, pluginPaths_1.resolveDataDir)();
-    const file = path.join(dir, 'device-id');
+// A real OS machine id: a GUID (Windows MachineGuid, macOS IOPlatformUUID)
+// or 32 hex chars (Linux machine-id). Anything else is rejected rather than
+// sent, which also keeps an old random `device-id` file from ever being read.
+function isMachineId(value) {
+    return (typeof value === 'string' &&
+        (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) ||
+            /^[0-9a-f]{32}$/i.test(value)));
+}
+function readSavedMachineId(dataDir) {
+    if (!dataDir)
+        return undefined;
     try {
-        const existing = fs.readFileSync(file, 'utf8').trim();
-        if (existing)
-            return existing;
+        const saved = fs.readFileSync(path.join(dataDir, MACHINE_ID_FILE), 'utf8').trim();
+        return isMachineId(saved) ? saved : undefined;
     }
     catch {
-        // doesn't exist yet — generate and persist below
+        return undefined;
     }
-    const id = (0, node_crypto_1.randomUUID)();
+}
+// Best effort — a failed save just means the next hook reads the OS again.
+function saveMachineId(dataDir, id) {
+    if (!dataDir)
+        return;
     try {
-        fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(file, id, 'utf8');
+        fs.mkdirSync(dataDir, { recursive: true });
+        fs.writeFileSync(path.join(dataDir, MACHINE_ID_FILE), id, 'utf8');
     }
     catch {
-        // best effort — if persistence fails, this run still gets a usable id,
-        // just not a stable one across future runs
+        // ignore
     }
-    return id;
 }
 // Normalized OS family for the machine this hook runs on, recorded on the
 // Agent entity at session start.
@@ -164,16 +177,22 @@ function osFamily(platform = process.platform) {
     }
 }
 let cached;
-// Resolves this machine's id for `User.registeredMachineIds`: the real
-// hardware id first (mac hardware UUID / machine-id / MachineGuid), falling
-// back to a persisted random id only when no OS-level hardware id is
-// available at all (unsupported platform, sandboxed environment, permission
-// denied).
-function resolveMachineId(dataDir) {
-    if (!cached) {
-        cached = readOsHardwareId() || persistedFallbackId(dataDir);
-    }
-    return cached;
+// Resolves this machine's id for `User.registeredMachineIds` and
+// context.machineId: the in-process cache, then the saved copy of the real
+// id, then the OS read. Returns undefined when none yields a real id — a
+// failure isn't cached, so a later call retries. `readOs` is a test seam.
+function resolveMachineId(dataDir, readOs = readOsHardwareId) {
+    if (cached)
+        return cached;
+    const saved = readSavedMachineId(dataDir);
+    if (saved)
+        return (cached = saved);
+    const id = readOs()?.trim();
+    if (!isMachineId(id))
+        return undefined;
+    cached = id;
+    saveMachineId(dataDir, id);
+    return id;
 }
 // Test seam only — resolveMachineId memoizes for the life of the process.
 function resetMachineIdCacheForTests() {

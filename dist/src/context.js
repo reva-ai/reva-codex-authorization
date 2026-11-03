@@ -63,7 +63,7 @@ function activeSessionFields(extras) {
         sessionEntryPoint: extras.currentSession?.entrypoint ?? '',
         sessionLastSeen: extras.currentSession?.lastSeen ?? 0,
         agentType: ingestionClient_1.AGENT_TYPE,
-        machineId: extras.machineId ?? '',
+        ...(extras.machineId ? { machineId: extras.machineId } : {}),
         os: osAttribute(),
         // Same everywhere-precedent as agentType, but gated: agentType is a
         // compile-time constant the schema already accepts, whereas `model` is a

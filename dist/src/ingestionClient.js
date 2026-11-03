@@ -280,6 +280,10 @@ async function addAttributeValue(cfg, entityTypeId, entityId, attribute) {
 // Agent.agentType.
 exports.AGENT_TYPE = 'Codex';
 async function upsertUser(cfg, userEntityTypeId, userEmail, machineId, accountId, dataDir) {
+    // No real OS machine id: registeredMachineIds is left untouched rather
+    // than given an empty or invented value.
+    if (!machineId)
+        (0, debug_1.debugLog)('no OS machine id — registeredMachineIds not updated');
     const state = await getEntityState(cfg, userEntityTypeId, userEmail);
     if (state === 'not-found') {
         // One POST carrying everything, Sets included. There is nothing to
@@ -287,14 +291,16 @@ async function upsertUser(cfg, userEntityTypeId, userEmail, machineId, accountId
         // be pure redundancy.
         await withEntityTypeRetry(cfg, dataDir, userEntityTypeId, 'userEntityTypeId', (id) => postEntity(cfg, id, userEmail, [
             { name: 'active', value: 'false' },
-            { name: 'registeredMachineIds', value: machineId },
+            ...(machineId ? [{ name: 'registeredMachineIds', value: machineId }] : []),
             { name: 'agents', value: accountId },
         ])).catch((err) => (0, debug_1.debugLog)(`upsertUser: POST failed — ${err}`));
         return;
     }
     // 'found' or 'inconclusive' — both take the assume-exists branch. Only the
     // accumulating Sets are updated; `active` is left alone forever.
-    await withEntityTypeRetry(cfg, dataDir, userEntityTypeId, 'userEntityTypeId', (id) => addAttributeValue(cfg, id, userEmail, { name: 'registeredMachineIds', value: machineId })).catch((err) => (0, debug_1.debugLog)(`upsertUser: registeredMachineIds PATCH failed — ${err}`));
+    if (machineId) {
+        await withEntityTypeRetry(cfg, dataDir, userEntityTypeId, 'userEntityTypeId', (id) => addAttributeValue(cfg, id, userEmail, { name: 'registeredMachineIds', value: machineId })).catch((err) => (0, debug_1.debugLog)(`upsertUser: registeredMachineIds PATCH failed — ${err}`));
+    }
     await withEntityTypeRetry(cfg, dataDir, userEntityTypeId, 'userEntityTypeId', (id) => addAttributeValue(cfg, id, userEmail, { name: 'agents', value: accountId })).catch((err) => (0, debug_1.debugLog)(`upsertUser: agents PATCH failed — ${err}`));
 }
 // GET-then-branch upsert for the Agent — the ACCOUNT, not the machine.

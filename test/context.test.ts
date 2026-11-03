@@ -192,7 +192,8 @@ test('os and machineId are present on every action', () => {
   assert.equal(invoke.machineId, 'machine-abc');
 });
 
-test('machineId defaults to empty when not provided', () => {
-  assert.equal(buildActionContext(mapping('write')).machineId, '');
-  assert.equal(buildInvokeAgentContext().machineId, '');
+test('machineId is left out, never sent empty, when no real id was read', () => {
+  assert.ok(!('machineId' in buildActionContext(mapping('write'))));
+  assert.ok(!('machineId' in buildInvokeAgentContext()));
+  assert.ok(!('machineId' in buildActionContext(mapping('write'), { machineId: '' })));
 });

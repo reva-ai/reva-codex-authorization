@@ -18,7 +18,7 @@ import {
 // strongest signal.
 function makeRepo(): { root: string; cleanup: () => void } {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'reva-map-'));
-  const repo = path.join(root, 'domain-services');
+  const repo = path.join(root, 'my-repo');
   fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
   for (const dir of ['routes', 'controllers', 'models']) {
     fs.mkdirSync(path.join(repo, dir), { recursive: true });
@@ -46,7 +46,7 @@ test('captured: Get-Content -Raw with a backslash path, -Raw is not a resource',
   const repo = makeRepo();
   t.after(repo.cleanup);
   assert.deepEqual(ids('Get-Content -Raw controllers\\albumController.js', repo.root), [
-    'domain-services/controllers/albumController.js',
+    'my-repo/controllers/albumController.js',
   ]);
 });
 
@@ -56,9 +56,9 @@ test('captured: comma-separated path list yields every directory', (t) => {
   // Select-Object's FullName,Name are property names, not paths, and neither
   // exists on disk — they must not become resources.
   assert.deepEqual(ids('Get-ChildItem routes,controllers,models | Select-Object FullName,Name', repo.root), [
-    'domain-services/routes',
-    'domain-services/controllers',
-    'domain-services/models',
+    'my-repo/routes',
+    'my-repo/controllers',
+    'my-repo/models',
   ]);
 });
 
@@ -66,7 +66,7 @@ test('captured: -ErrorAction SilentlyContinue value is not mistaken for a path',
   const repo = makeRepo();
   t.after(repo.cleanup);
   assert.deepEqual(ids('Get-Content routes/likedRoutes.js -ErrorAction SilentlyContinue', repo.root), [
-    'domain-services/routes/likedRoutes.js',
+    'my-repo/routes/likedRoutes.js',
   ]);
 });
 
@@ -75,7 +75,7 @@ test('captured: a quoted rg regex containing pipes is neither split nor treated 
   t.after(repo.cleanup);
   // The "." argument is a real directory and SHOULD be picked up; the regex
   // must not be, and its pipes must not split the command into segments.
-  assert.deepEqual(ids('rg -n "liked|Like|songRoutes|router" -S .', repo.root), ['domain-services']);
+  assert.deepEqual(ids('rg -n "liked|Like|songRoutes|router" -S .', repo.root), ['my-repo']);
 });
 
 test('an expression that merely looks path-shaped is excluded', (t) => {
@@ -85,7 +85,7 @@ test('an expression that merely looks path-shaped is excluded', (t) => {
   // not a path, and does not exist on disk.
   const mapping = mapToolToCedar('Bash', { command: `node -e "require('./routes/likedRoutes')"` }, repo.root);
   assert.equal(mapping.candidateCount, 0);
-  assert.deepEqual(mapping.mappings.map((m) => m.resourceId), ['domain-services']);
+  assert.deepEqual(mapping.mappings.map((m) => m.resourceId), ['my-repo']);
   assert.equal(mapping.mappings[0].resourceType, 'Directory');
 });
 
@@ -94,7 +94,7 @@ test('a command with no path arguments falls back to the working directory', (t)
   t.after(repo.cleanup);
   const mapping = mapToolToCedar('Bash', { command: 'git diff' }, repo.root);
   assert.equal(mapping.candidateCount, 0);
-  assert.deepEqual(mapping.mappings.map((m) => m.resourceId), ['domain-services']);
+  assert.deepEqual(mapping.mappings.map((m) => m.resourceId), ['my-repo']);
 });
 
 test('chained commands produce one resource per distinct path, deduped', (t) => {
@@ -103,9 +103,9 @@ test('chained commands produce one resource per distinct path, deduped', (t) => 
   const command =
     'Get-Content server.js; Get-Content routes/songRoutes.js; Get-ChildItem models; Get-Content server.js';
   assert.deepEqual(ids(command, repo.root), [
-    'domain-services/server.js',
-    'domain-services/routes/songRoutes.js',
-    'domain-services/models',
+    'my-repo/server.js',
+    'my-repo/routes/songRoutes.js',
+    'my-repo/models',
   ]);
 });
 
@@ -150,7 +150,7 @@ test('tilde is expanded, so a file outside the repo gets no Repository ancestor'
   const mapping = mapToolToCedar('Bash', { command: 'Set-Content ~/Desktop/escape.txt' }, repo.root);
   const outside = mapping.mappings[0];
   // Regression guard for the documented tilde bypass: without expansion this
-  // resolves INSIDE the repo and wrongly inherits Repository::"domain-services".
+  // resolves INSIDE the repo and wrongly inherits Repository::"my-repo".
   assert.ok(path.isAbsolute(outside.resourceId), `expected an absolute id, got ${outside.resourceId}`);
   assert.deepEqual(outside.resourceParents, []);
 });
@@ -175,9 +175,9 @@ test('ancestor chain is flat and complete, repo root last', (t) => {
   t.after(repo.cleanup);
   const mapping = mapToolToCedar('Bash', { command: 'Get-Content routes/songRoutes.js' }, repo.root);
   assert.deepEqual(mapping.mappings[0].resourceParents, [
-    { type: 'Directory', id: 'domain-services/routes' },
-    { type: 'Directory', id: 'domain-services' },
-    { type: 'Repository', id: 'domain-services' },
+    { type: 'Directory', id: 'my-repo/routes' },
+    { type: 'Directory', id: 'my-repo' },
+    { type: 'Repository', id: 'my-repo' },
   ]);
 });
 
@@ -201,8 +201,8 @@ test('apply_patch: Add is write, Update is edit', (t) => {
   assert.deepEqual(
     mapping.mappings.map((m) => [m.actionName, m.resourceId]),
     [
-      ['write', 'domain-services/routes/likedRoutes.js'],
-      ['edit', 'domain-services/models/user.js'],
+      ['write', 'my-repo/routes/likedRoutes.js'],
+      ['edit', 'my-repo/models/user.js'],
     ],
   );
   for (const m of mapping.mappings) assert.equal(m.resourceType, 'File');
@@ -255,8 +255,8 @@ test('apply_patch: Move is two resources — removal at source, write at destina
   assert.deepEqual(
     mapping.mappings.map((m) => [m.actionName, m.resourceId]),
     [
-      [DELETE_ACTION, 'domain-services/models/user.js'],
-      ['write', 'domain-services/models/account.js'],
+      [DELETE_ACTION, 'my-repo/models/user.js'],
+      ['write', 'my-repo/models/account.js'],
     ],
   );
 });
@@ -456,4 +456,38 @@ test('a NEW quoted folder with spaces under an existing folder is still a resour
   t.after(repo.cleanup);
   const target = path.join(repo.root, 'routes', 'New Folder');
   assert.deepEqual(extractShellTargets(`New-Item -ItemType Directory "${target}"`, repo.root), [target]);
+});
+
+// Reproduces the D:\app deletion from a live Codex Desktop session: the only
+// literal path sits inside (Resolve-Path '...').Path and the delete itself
+// names a variable. Brackets used to glue the path to ').Path', so nothing
+// was found and the resource fell back to the working directory.
+test('a quoted path inside a bracketed expression is a resource', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'reva-paren-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const app = path.join(root, 'app');
+  fs.mkdirSync(app);
+  const command =
+    `$target = (Resolve-Path -LiteralPath '${app}').Path; ` +
+    `if ($target -ne '${app}') { throw "Unexpected target: $target" }; ` +
+    `Remove-Item -LiteralPath $target -Recurse -Force`;
+  assert.deepEqual(extractShellTargets(command, root), [app]);
+  const file = path.join(root, 'notes.txt');
+  fs.writeFileSync(file, '', 'utf8');
+  assert.deepEqual(extractShellTargets(`Get-Content (Get-Item '${file}').FullName`, root), [file]);
+});
+
+test('brackets and braces outside quotes do not change commands that already mapped', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'reva-paren2-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const app = path.join(root, 'app');
+  fs.mkdirSync(app);
+  assert.deepEqual(extractShellTargets(`if (Test-Path '${app}') { Remove-Item '${app}' -Recurse -Force }`, root), [app]);
+  assert.deepEqual(extractShellTargets(`Get-ChildItem '${app}' | ForEach-Object { $_.Name }`, root), [app]);
+  // A quoted path with brackets in its name stays one token.
+  const x86 = path.join(root, 'Program Files (x86)');
+  fs.mkdirSync(x86);
+  assert.deepEqual(extractShellTargets(`Get-ChildItem '${x86}'`, root), [x86]);
+  // A quoted message containing brackets is still not a resource.
+  assert.deepEqual(extractShellTargets(`Write-Output "Deleted ${app} (done)"`, root), []);
 });
