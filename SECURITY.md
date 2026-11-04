@@ -50,7 +50,7 @@ Alongside the content, each request carries identity and resource metadata:
 | principal | The developer's **email address** | the `email` claim of the `id_token` in `$CODEX_HOME/auth.json`; falls back to the **OS username** if absent, e.g. with API-key sign-in |
 | subject / agent id | The ChatGPT **account id** | `chatgpt_account_id` from the same `id_token` (or `tokens.account_id` in `auth.json`), or `agent_id` / `REVA_AGENT_ID` when set |
 | resource id | The file, directory, repository, tool or sub-agent acted on | See "Paths" below |
-| context | Machine id, OS family (`Windows` / `Linux`), the Codex surface, and — only with `REVA_MODEL_CONTEXT=1` — the model slug | local |
+| context | Machine id, OS (`Windows` / `macOS` / `Linux`), the Codex surface, and — unless `REVA_MODEL_CONTEXT=0` — the model slug | local |
 | session | Session id, turn number, and a count of concurrent sessions on this machine | local |
 | correlation ids | A per-chat **thread id** — the Codex session id, sent as `X-Reva-Thread-Id` — plus a per-turn trace id and a per-operation span id in the W3C `traceparent` header | local |
 
@@ -58,8 +58,8 @@ At **session start** the plugin also registers entities with Reva's ingestion AP
 `https://<REVA_HOST>/ingestion/v2`:
 
 - the developer's email, this machine's **hardware id** (`IOPlatformUUID` on macOS,
-  `/etc/machine-id` on Linux, `MachineGuid` on Windows — or a random id generated once and
-  stored locally if none is readable), and the agent id;
+  `/etc/machine-id` on Linux, `MachineGuid` on Windows — left out entirely if none is
+  readable, never invented), and the agent id;
 - on the agent: the OS family and the **model slug** of the session;
 - MCP servers from `[mcp_servers.<name>]` tables in `$CODEX_HOME/config.toml`.
 

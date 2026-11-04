@@ -87,13 +87,12 @@ async function runHook(
       cwd: options.cwd,
       env: {
         ...process.env,
-        // Neutralize every OPT-IN knob explicitly. process.env is inherited
+        // Reset every knob to its DEFAULT explicitly. process.env is inherited
         // for PATH and friends, which means a developer machine that has
-        // `setx REVA_MODEL_CONTEXT 1` set would otherwise leak that into a
+        // `setx REVA_POLICY_STORE_ID ...` set would otherwise leak that into a
         // test asserting the DEFAULT shape — and the test would fail (or
         // worse, pass) for reasons unrelated to the code. Any test that wants
-        // a knob on sets it through options.env below.
-        REVA_MODEL_CONTEXT: '',
+        // a knob changed sets it through options.env below.
         REVA_POLICY_STORE_ID: '',
         REVA_DEBUG: '',
         REVA_HOST: `127.0.0.1:${address.port}`,
@@ -484,21 +483,16 @@ test('SessionStart never blocks — not on a 5xx, not without a token, not on ba
   }
 });
 
-test('end to end: the flag controls context.model in the real outgoing request', async (t) => {
+test('end to end: context.model is in the real outgoing request', async (t) => {
   const repo = makeRepo(t);
   const input = preToolInput(repo, { model: 'gpt-5.6-terra' });
 
-  const off = await runHook('authorize.js', input, ALLOW);
-  assert.equal(off.code, 0, off.stderr);
-  assert.ok(!('model' in off.requests[0].context), 'model must not be sent by default');
-  assert.ok('os' in off.requests[0].context, 'os is sent on every action');
-  assert.equal(off.requests[0].context.machineId, TEST_MACHINE_ID, 'machineId is sent on every action');
-
-  const on = await runHook('authorize.js', input, ALLOW, { env: { REVA_MODEL_CONTEXT: '1' } });
-  assert.equal(on.code, 0, on.stderr);
-  assert.equal(on.requests[0].context.model, 'gpt-5.6-terra');
-  assert.ok('os' in on.requests[0].context);
-  assert.equal(on.requests[0].context.agentType, 'Codex');
+  const run = await runHook('authorize.js', input, ALLOW);
+  assert.equal(run.code, 0, run.stderr);
+  assert.equal(run.requests[0].context.model, 'gpt-5.6-terra', 'model is sent on every action');
+  assert.ok('os' in run.requests[0].context, 'os is sent on every action');
+  assert.equal(run.requests[0].context.machineId, TEST_MACHINE_ID, 'machineId is sent on every action');
+  assert.equal(run.requests[0].context.agentType, 'Codex');
 });
 
 test('end to end: UserPromptSubmit sends the same model on invokeAgent', async (t) => {
@@ -516,7 +510,6 @@ test('end to end: UserPromptSubmit sends the same model on invokeAgent', async (
       transcript_path: null,
     },
     ALLOW,
-    { env: { REVA_MODEL_CONTEXT: '1' } },
   );
   assert.equal(run.code, 0, run.stderr);
   assert.equal(run.requests[0].action.name, 'invokeAgent');

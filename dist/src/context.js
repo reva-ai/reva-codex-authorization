@@ -45,7 +45,11 @@ const ingestionClient_1 = require("./ingestionClient");
 // tests can cover the mapping directly without mocking node:os — same
 // pattern config.ts's loadConfig(env = process.env) uses.
 function osAttribute(platform = nodeOs.platform()) {
-    return platform === 'win32' ? 'Windows' : 'Linux';
+    if (platform === 'win32')
+        return 'Windows';
+    if (platform === 'darwin')
+        return 'macOS';
+    return 'Linux';
 }
 function activeTurnEvidence(extras) {
     const messages = extras.conversationMessages || [];
@@ -65,10 +69,7 @@ function activeSessionFields(extras) {
         agentType: ingestionClient_1.AGENT_TYPE,
         ...(extras.machineId ? { machineId: extras.machineId } : {}),
         os: osAttribute(),
-        // Same everywhere-precedent as agentType, but gated: agentType is a
-        // compile-time constant the schema already accepts, whereas `model` is a
-        // new attribute the schema must declare first.
-        ...(extras.modelContext ? { model: extras.model ?? '' } : {}),
+        model: extras.model ?? '',
     };
 }
 function buildActionContext(mapping, extras = {}) {

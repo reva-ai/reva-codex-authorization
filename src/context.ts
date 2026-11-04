@@ -58,19 +58,16 @@ import {
 // AGENT_TYPE constant ingestionClient.ts sends as the Agent entity's
 // agentType attribute.
 //
-// model is sent on every action too, but ONLY when RevaConfig.modelContext
-// is enabled, because unlike agentType it is an attribute the Cedar schema
-// must declare first. It records which model made each individual call —
-// something the Agent entity's `models` Set cannot answer, since that
-// accumulates every model the machine has ever used.
+// model is sent on every action too — the schema declares it on every
+// action. It records which model made each individual call — something
+// the Agent entity's `models` Set cannot answer, since that accumulates
+// every model the machine has ever used.
 //
-// os is also sent on every action — "Linux" or "Windows". This is a
-// command-dialect distinction, not a literal kernel identity: every
-// Unix-like platform Node runs on (macOS/Darwin included) uses the same
-// POSIX shell commands as Linux, so it reports as "Linux" too — only
-// win32 (cmd/PowerShell, different commands entirely) is genuinely
-// different. Agent.operatingSystems is still PATCH-ADDed at ingestion;
-// context.os matches the Claude evaluation contract for per-request policy.
+// os is also sent on every action — the real OS: "Windows", "macOS" or
+// "Linux". Any other Unix-like platform reports "Linux"; Codex itself ships
+// only for those three. THIS IS A POLICY-VISIBLE CHOICE: a Cedar policy
+// matching one of these strings breaks if they change. Agent.operatingSystems
+// is still PATCH-ADDed at ingestion, as its own lowercase osFamily() value.
 //
 // machineId is also sent on every action — this machine's own id (see
 // deviceId.ts's resolveMachineId), the same value PATCH-ADDed to
@@ -100,10 +97,6 @@ export interface ActionContextExtras {
   // payload's required `model` field (e.g. "gpt-5.6-terra"). Never guessed:
   // a payload without it sends an empty string rather than a default.
   model?: string;
-  // Gate for `model` above. See RevaConfig.modelContext — Cedar context is
-  // closed, so this may only be sent once the schema declares `model` on
-  // every gated action.
-  modelContext?: boolean;
   // This machine's id (see deviceId.ts's resolveMachineId) — see the
   // interface-level comment above for why this is passed in, not resolved
   // here.
@@ -113,8 +106,10 @@ export interface ActionContextExtras {
 // Exported (with an injectable platform, defaulting to the real one) so
 // tests can cover the mapping directly without mocking node:os — same
 // pattern config.ts's loadConfig(env = process.env) uses.
-export function osAttribute(platform: NodeJS.Platform = nodeOs.platform()): 'Linux' | 'Windows' {
-  return platform === 'win32' ? 'Windows' : 'Linux';
+export function osAttribute(platform: NodeJS.Platform = nodeOs.platform()): 'Windows' | 'macOS' | 'Linux' {
+  if (platform === 'win32') return 'Windows';
+  if (platform === 'darwin') return 'macOS';
+  return 'Linux';
 }
 
 function activeTurnEvidence(extras: ActionContextExtras): Record<string, any> {
@@ -136,10 +131,7 @@ function activeSessionFields(extras: ActionContextExtras): Record<string, any> {
     agentType: AGENT_TYPE,
     ...(extras.machineId ? { machineId: extras.machineId } : {}),
     os: osAttribute(),
-    // Same everywhere-precedent as agentType, but gated: agentType is a
-    // compile-time constant the schema already accepts, whereas `model` is a
-    // new attribute the schema must declare first.
-    ...(extras.modelContext ? { model: extras.model ?? '' } : {}),
+    model: extras.model ?? '',
   };
 }
 
@@ -171,7 +163,7 @@ export function buildActionContext(
 export function buildInvokeAgentContext(
   activeSessionCount = 0,
   currentSession?: ActiveSession,
-  extras: Pick<ActionContextExtras, 'model' | 'modelContext' | 'machineId'> = {},
+  extras: Pick<ActionContextExtras, 'model' | 'machineId'> = {},
 ): Record<string, any> {
   return {
     timestamp: Date.now(),

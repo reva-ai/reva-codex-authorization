@@ -53,10 +53,9 @@ async function main() {
     const traceparent = (0, trace_1.traceparentHeader)(traceSession.traceId, traceSession.spanId);
     const request = (0, invokeAgent_1.buildInvokeAgentRequest)(userEmail, cfg.agentId, prompt, (0, turnCache_1.directSessionFromTurn)(input.session_id, turn), activeSessionCount, currentSession, 
     // `model` comes straight off the hook payload, where Codex declares it
-    // required. Only reaches context when REVA_MODEL_CONTEXT is set.
+    // required, and reaches context on every request.
     {
         model: input.model,
-        modelContext: cfg.modelContext,
         machineId: (0, deviceId_1.resolveMachineId)(dataDir),
     });
     (0, debug_1.debugLog)(`-> invokeAgent as ${userEmail} on Agent:${cfg.agentId} (turn=${input.turn_id})`);

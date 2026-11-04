@@ -146,38 +146,32 @@ test('an oversized tool response is truncated to 10000 characters plus an ellips
 });
 
 
-test('model is NOT sent unless modelContext is enabled', () => {
-  // Cedar context is closed: an undeclared attribute returns 4xx, which this
-  // plugin treats as a real denial. Default-off keeps it safe to ship before
-  // the schema lands.
-  for (const action of ['executeBash', 'write', 'edit', 'invokeTool', 'spawn'] as const) {
+test('model rides on every action beside agentType', () => {
+  for (const action of ['executeBash', 'read', 'write', 'edit', 'glob', 'grep', 'invokeTool', 'spawn'] as const) {
     const ctx = buildActionContext(mapping(action), { model: 'gpt-5.6-terra' });
-    assert.ok(!('model' in ctx), `${action} must not carry model by default`);
-  }
-  assert.ok(!('model' in buildInvokeAgentContext(1, session, { model: 'gpt-5.6-terra' })));
-});
-
-test('with modelContext, model rides on every action beside agentType', () => {
-  for (const action of ['executeBash', 'write', 'edit', 'invokeTool', 'spawn'] as const) {
-    const ctx = buildActionContext(mapping(action), { model: 'gpt-5.6-terra', modelContext: true });
     assert.equal(ctx.model, 'gpt-5.6-terra');
     assert.equal(ctx.agentType, 'Codex');
   }
 });
 
 test('invokeAgent carries model too, so every action in a turn agrees', () => {
-  const ctx = buildInvokeAgentContext(1, session, { model: 'gpt-5.6-terra', modelContext: true });
+  const ctx = buildInvokeAgentContext(1, session, { model: 'gpt-5.6-terra' });
   assert.equal(ctx.model, 'gpt-5.6-terra');
 });
 
 test('a missing model is sent as empty rather than guessed', () => {
-  assert.equal(buildActionContext(mapping('executeBash'), { modelContext: true }).model, '');
+  assert.equal(buildActionContext(mapping('executeBash')).model, '');
+  assert.equal(buildInvokeAgentContext().model, '');
 });
 
-test('osAttribute is a command-dialect distinction, not literal kernel identity — every Unix-like platform is "Linux", only win32 is "Windows"', () => {
+test('osAttribute reports the real OS: Windows, macOS or Linux', () => {
+  // Policy-visible strings: a Cedar policy matching "macOS" depends on these.
   assert.equal(osAttribute('win32'), 'Windows');
-  for (const unixLike of ['linux', 'darwin', 'freebsd', 'openbsd', 'aix', 'sunos'] as const) {
-    assert.equal(osAttribute(unixLike), 'Linux', `${unixLike} uses the same POSIX shell commands as Linux`);
+  assert.equal(osAttribute('darwin'), 'macOS');
+  assert.equal(osAttribute('linux'), 'Linux');
+  // Codex ships only for those three; any other Unix-like platform is Linux.
+  for (const unixLike of ['freebsd', 'openbsd', 'aix', 'sunos'] as const) {
+    assert.equal(osAttribute(unixLike), 'Linux', `${unixLike} reports as Linux`);
   }
 });
 

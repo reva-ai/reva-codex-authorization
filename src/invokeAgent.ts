@@ -12,7 +12,7 @@ export function buildInvokeAgentRequest(
   session: DirectEvalSession,
   activeSessionCount = 0,
   currentSession?: ActiveSession,
-  extras: { model?: string; modelContext?: boolean; machineId?: string } = {},
+  extras: { model?: string; machineId?: string } = {},
 ): CedarRequest {
   // User's schema-declared SCIM attributes have no trustworthy source in
   // this hook, so send a bare direct spec and let RTG resolve the provisioned

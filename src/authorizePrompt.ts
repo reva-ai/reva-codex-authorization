@@ -64,10 +64,9 @@ async function main(): Promise<void> {
     activeSessionCount,
     currentSession,
     // `model` comes straight off the hook payload, where Codex declares it
-    // required. Only reaches context when REVA_MODEL_CONTEXT is set.
+    // required, and reaches context on every request.
     {
       model: input.model,
-      modelContext: cfg.modelContext,
       machineId: resolveMachineId(dataDir),
     },
   );

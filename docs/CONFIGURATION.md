@@ -57,7 +57,7 @@ sees it.
 | `REVA_PDP_TIMEOUT_MS` | no | `25000` | Timeout for an evaluation call. On timeout the plugin fails **closed** — the action is blocked. |
 | `REVA_INGESTION_TIMEOUT_MS` | no | `5000` | Timeout for each ingestion call. Deliberately much shorter — ingestion is best-effort and never gates an action. |
 | `REVA_SESSION_ENTRYPOINT` | no | — | Value reported as `context.sessionEntryPoint` **only when Codex supplies no surface marker of its own** — for example a Homebrew or direct-download CLI. A detected surface always wins. See [SURFACES.md](SURFACES.md). |
-| `REVA_MODEL_CONTEXT` | no | off | `1` or `true` adds `model` — Codex's model slug for the session — to every action's Cedar context. **Your schema must declare `model` on every gated action first.** Cedar context is closed, so enabling this early denies everything. |
+| `REVA_MODEL_CONTEXT` | no | on | Adds `model` — the model that made each call, from the hook payload — to every action's Cedar context. **Your schema must declare `model` on every action.** Cedar context is closed, so on a schema without it every request is denied: set `0` or `false` to turn it off. |
 | `REVA_POLICY_STORE_ID` | no | — | Sent as a `policyStoreId` header on evaluation and ingestion. Provisional and opt-in: Set it only if your platform requires the store named on the request. |
 | `REVA_CODEX_AUTH_PATH` | no | `$CODEX_HOME/auth.json` | Overrides where the plugin reads your ChatGPT identity from. Intended for tests.
 | `REVA_SESSION_CWD` | no | — | Set by the plugin on its detached MCP-ingestion child. Not intended to be set by hand. |

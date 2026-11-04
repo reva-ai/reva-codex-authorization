@@ -84,13 +84,6 @@ test('policyStoreId is omitted unless explicitly configured', () => {
   );
 });
 
-test('modelContext is off unless explicitly enabled', () => {
-  assert.equal(loadConfig({ ...base }, NO_CONFIG).modelContext, false);
-  assert.equal(loadConfig({ ...base, REVA_MODEL_CONTEXT: '0' }, NO_CONFIG).modelContext, false);
-  assert.equal(loadConfig({ ...base, REVA_MODEL_CONTEXT: '1' }, NO_CONFIG).modelContext, true);
-  assert.equal(loadConfig({ ...base, REVA_MODEL_CONTEXT: 'true' }, NO_CONFIG).modelContext, true);
-});
-
 test('the Agent id has NO fallback — an unresolvable account fails loudly', () => {
   const noAuth = { REVA_AUTH_TOKEN: 'test-token', REVA_CODEX_AUTH_PATH: '/definitely/not/here/auth.json' };
   assert.throws(() => loadConfig(noAuth, NO_CONFIG), /cannot resolve a stable account id/);

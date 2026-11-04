@@ -74,7 +74,6 @@ async function runSessionStart(
         ...process.env,
         // See hookOutput.test.ts: opt-in knobs and surface markers must not
         // leak in from the developer's own environment.
-        REVA_MODEL_CONTEXT: '',
         REVA_POLICY_STORE_ID: '',
         CODEX_INTERNAL_ORIGINATOR_OVERRIDE: process.env.CODEX_INTERNAL_ORIGINATOR_OVERRIDE ?? '',
         CODEX_MANAGED_PACKAGE_ROOT: process.env.CODEX_MANAGED_PACKAGE_ROOT ?? '',

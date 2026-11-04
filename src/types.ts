@@ -24,22 +24,6 @@ export interface RevaConfig {
   // this turns out to be required, it is a platform-contract change, not
   // something to special-case here.
   policyStoreId?: string;
-  // When true, every action's Cedar context also carries `model` — Codex's
-  // model slug for the session, so a decision log records WHICH model made
-  // each call.
-  //
-  // OFF BY DEFAULT. Cedar context records are CLOSED: sending an attribute
-  // the action does not declare is a schema violation that returns 4xx, which
-  // this plugin treats as a real denial rather than an outage. Enabling this
-  // before the schema declares `model` on every gated action denies
-  // everything. See "Schema requests" in the README.
-  //
-  // Deliberately model-only. The OS is NOT sent here — it is already recorded
-  // on the Agent entity as `operatingSystems` and cannot change between
-  // sessions, so the RTG can join it server-side. `model` cannot be joined
-  // that way: Agent.models is a Set of everything the machine has ever used
-  // and cannot say which one made a given call.
-  modelContext?: boolean;
 }
 
 // ---------------------------------------------------------------------------

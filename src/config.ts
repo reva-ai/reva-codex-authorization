@@ -127,7 +127,5 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, configPath?: st
     // Set it only when the target platform actually requires the store to
     // be named on the request.
     policyStoreId: env.REVA_POLICY_STORE_ID?.trim() || undefined,
-    // Opt-in. Unset => context shape is unchanged and schema-safe.
-    modelContext: env.REVA_MODEL_CONTEXT === '1' || env.REVA_MODEL_CONTEXT?.toLowerCase() === 'true',
   };
 }

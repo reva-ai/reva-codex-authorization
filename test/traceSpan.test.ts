@@ -45,7 +45,6 @@ async function runHook(entrypoint: string, input: Record<string, unknown>, cwd: 
       cwd,
       env: {
         ...process.env,
-        REVA_MODEL_CONTEXT: '',
         REVA_POLICY_STORE_ID: '',
         REVA_DEBUG: '',
         REVA_HOST: `127.0.0.1:${address.port}`,
